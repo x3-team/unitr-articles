@@ -1,0 +1,67 @@
+# Проверки боевого режима: типы, юнит-тесты, сборка Node.js-сервера, критерии приёмки
+# (настоящие HTTP 301/404, заголовки кеша, sitemap, robots) и сквозной тест с GraphQL-источником.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Проверка WP-плагина (синтаксис PHP)
+        run: for f in $(find wp -name '*.php'); do php -l "$f"; done
+
+  server-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Сборка боевого режима (демо-данные)
+        run: npx next build
+        env:
+          CONTENT_SOURCE: mock
+          SITE_URL: http://localhost:3000
+      - name: Запуск и проверка критериев приёмки
+        run: |
+          cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/
+          (cd .next/standalone && PORT=3000 HOSTNAME=127.0.0.1 node server.js &) && sleep 3
+          node scripts/check-acceptance.mjs http://localhost:3000 --mode=server --report=acceptance-server.md
+        env:
+          CONTENT_SOURCE: mock
+          SITE_URL: http://localhost:3000
+          REVALIDATE_SECRET: ci-secret
+      - if: always()
+        run: cat acceptance-server.md >> "$GITHUB_STEP_SUMMARY"
+
+  e2e-graphql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Публикация / снятие / смена адреса / новая рубрика через GraphQL
+        run: node tests/e2e/run-graphql-e2e.mjs
+      - if: always()
+        run: cat docs/acceptance-graphql.md >> "$GITHUB_STEP_SUMMARY" || true

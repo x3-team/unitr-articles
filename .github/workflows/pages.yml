@@ -1,0 +1,100 @@
+# Демо раздела «Статьи» на GitHub Pages: статический пререндер (STATIC_EXPORT=1) публикуется в ветку gh-pages,
+# после публикации — проверка критериев приёмки по живому адресу.
+#
+# Пересборка по расписанию каждые 15 минут — аналог ревалидации кеша (ТЗ, задача 3): при источнике данных GraphQL
+# (переменная репозитория CONTENT_SOURCE=graphql, секреты WP_GRAPHQL_URL / WP_GRAPHQL_TOKEN) новые и снятые
+# с публикации статьи WordPress появляются/исчезают на демо не позже чем через 15 минут. Если данные не изменились,
+# публикация не выполняется (buildId детерминирован).
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+      site_url: ${{ steps.vars.outputs.site_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - id: vars
+        run: |
+          echo "base_path=/${{ github.event.repository.name }}" >> "$GITHUB_OUTPUT"
+          echo "site_url=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}" >> "$GITHUB_OUTPUT"
+      - run: npm ci
+      - name: Статический пререндер
+        run: npm run build:pages
+        env:
+          BASE_PATH: ${{ steps.vars.outputs.base_path }}
+          SITE_URL: ${{ steps.vars.outputs.site_url }}
+          BUILD_ID: ${{ github.sha }}
+          CONTENT_SOURCE: ${{ vars.CONTENT_SOURCE || 'mock' }}
+          WP_GRAPHQL_URL: ${{ secrets.WP_GRAPHQL_URL }}
+          WP_GRAPHQL_TOKEN: ${{ secrets.WP_GRAPHQL_TOKEN }}
+      - name: Публикация в gh-pages (только при изменениях)
+        id: publish
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git clone --depth 1 --branch gh-pages "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" site
+          else
+            mkdir site && git -C site init -b gh-pages && git -C site remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
+          rsync -a --delete --exclude .git out/ site/
+          cd site
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Изменений нет — публикация не требуется"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Демо: сборка ${GITHUB_SHA::7} (${GITHUB_EVENT_NAME})"
+            git push origin gh-pages
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  verify:
+    needs: build-deploy
+    if: needs.build-deploy.outputs.published == 'true' || github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Ожидание публикации на Pages
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS "${SITE_URL}/articles/" | grep -q "/_next/static/${GITHUB_SHA::12}/\|${GITHUB_SHA}"; then echo "опубликовано"; exit 0; fi
+            sleep 10
+          done
+          echo "::warning::Не дождались новой версии, проверяю текущую"
+        env:
+          SITE_URL: ${{ needs.build-deploy.outputs.site_url }}
+      - name: Проверка критериев приёмки на опубликованном демо (HTML без JS)
+        run: node scripts/check-acceptance.mjs "$SITE_URL" --mode=pages --report=acceptance-pages.md
+        env:
+          SITE_URL: ${{ needs.build-deploy.outputs.site_url }}
+      - if: always()
+        run: cat acceptance-pages.md >> "$GITHUB_STEP_SUMMARY" || true

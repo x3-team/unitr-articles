@@ -1,0 +1,19 @@
+# systemd-сервис (VPS Reg.ru). Установка:
+#   sudo cp deploy/unitr-articles.service /etc/systemd/system/ && sudo systemctl enable --now unitr-articles
+[Unit]
+Description=unitr.ru — раздел «Статьи» (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/unitr-articles/current
+# секреты и настройки — в /etc/unitr-articles.env (права 600), формат как .env.example
+EnvironmentFile=/etc/unitr-articles.env
+Environment=NODE_ENV=production PORT=3000 HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

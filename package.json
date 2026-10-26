@@ -1,0 +1,35 @@
+{
+  "name": "unitr-articles",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Раздел «Статьи» сайта unitr.ru: SSR/ISR на Next.js + GraphQL WordPress (manage.unitr.ru), демо — статический пререндер на GitHub Pages",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "build:pages": "STATIC_EXPORT=1 next build && node scripts/postexport.mjs",
+    "covers": "python3 scripts/make-covers.py",
+    "test": "node --import tsx --test \"tests/*.test.ts\"",
+    "check": "node scripts/check-acceptance.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/inter": "5.2.6",
+    "next": "15.5.28",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "@types/react": "19.1.10",
+    "tsx": "^4.20.5",
+    "typescript": "5.9.2"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "overrides": {
+    "postcss": "8.5.23"
+  }
+}
