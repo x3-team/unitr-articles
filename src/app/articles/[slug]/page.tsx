@@ -7,6 +7,7 @@ import { dateNumeric, truncate } from "@/lib/format";
 import { pageMetadata } from "@/lib/meta";
 import { ARTICLES_PATH, articlePath, imgSrc } from "@/lib/paths";
 import { articleLd, ARTICLES_CRUMB, breadcrumbLd, HOME_CRUMB, jsonLd } from "@/lib/seo";
+import { staticParams } from "@/lib/static-params";
 
 /** ISR (5 минут + 5 минут кеш данных ≤ 15 минут); новые статьи рендерятся на сервере при первом обращении (dynamicParams) */
 export const revalidate = 300;
@@ -14,7 +15,7 @@ export const revalidate = 300;
 type Params = Promise<{ slug: string }>;
 
 export async function generateStaticParams() {
-  return (await getAllArticles()).map((a) => ({ slug: a.slug }));
+  return staticParams((await getAllArticles()).map((a) => ({ slug: a.slug })), { slug: "_" });
 }
 
 function seoOf(a: { title: string; excerpt: string; seo: { title: string; description: string } }) {

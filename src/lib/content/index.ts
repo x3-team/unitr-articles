@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { CACHE_TAG, CONTENT_SOURCE, DEFAULT_PER_PAGE, ENV_PER_PAGE, REVALIDATE_SECONDS } from "../config";
-import { isLatinSlug, slugify } from "../slugify";
+import { isLatinSlug, latinSlug } from "../slugify";
 import { graphqlSource } from "./graphql";
 import { mockSource } from "./mock";
 import type { Article, ArticleSummary, ContentSource, Paginated } from "./types";
@@ -26,10 +26,10 @@ const loadArticles = cached("articles", async (): Promise<Article[]> => {
   const list = await source.listArticles();
   const seen = new Set<string>();
   return list.map((a) => {
-    let slug = isLatinSlug(a.slug) ? a.slug : slugify(a.slug) || slugify(a.title);
+    let slug = latinSlug(a.slug, a.title);
     if (seen.has(slug)) slug = `${slug}-${a.id.replace(/\W/g, "").slice(-6).toLowerCase()}`;
     seen.add(slug);
-    return { ...a, slug };
+    return slug === a.slug ? a : { ...a, slug, wpSlug: a.slug };
   });
 });
 
@@ -78,9 +78,10 @@ export const getRedirects = cached("redirects", async () => {
   const map = await source.redirects();
   const articles = await getAllArticles();
   const exists = new Set(articles.map((a) => a.slug));
+  const byWpSlug = new Map(articles.map((a) => [a.wpSlug ?? a.slug, a.slug]));
   const result: Record<string, string> = {};
   for (const [from, to] of Object.entries(map)) {
-    const target = isLatinSlug(to) ? to : slugify(to);
+    const target = byWpSlug.get(to) ?? (isLatinSlug(to) ? to : "");
     if (target && exists.has(target) && !exists.has(from) && from !== target) result[from] = target;
   }
   return result;

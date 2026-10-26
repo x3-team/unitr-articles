@@ -15,8 +15,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -29,8 +29,8 @@ jobs:
   server-acceptance:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -55,8 +55,8 @@ jobs:
   e2e-graphql:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -65,3 +65,28 @@ jobs:
         run: node tests/e2e/run-graphql-e2e.mjs
       - if: always()
         run: cat docs/acceptance-graphql.md >> "$GITHUB_STEP_SUMMARY" || true
+
+  e2e-apache:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: sudo apt-get update -q && sudo apt-get install -y -q apache2 && sudo systemctl stop apache2 || true
+      - name: Статический вариант для хостинга без Node.js (Apache + .htaccess) поверх SPA
+        run: node tests/e2e/run-apache-e2e.mjs
+      - if: always()
+        run: cat docs/acceptance-static.md >> "$GITHUB_STEP_SUMMARY" || true
+
+  wp-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: WP-плагин в настоящем WordPress (Playground, SQLite)
+        run: tests/wp/run-wp-smoke.sh

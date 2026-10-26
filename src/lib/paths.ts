@@ -7,6 +7,13 @@ export function archivePath(page = 1): string {
   return page <= 1 ? ARTICLES_PATH : `${ARTICLES_PATH}page/${page}/`;
 }
 
+/**
+ * Собственные файлы раздела (обложки демо, og-картинка, логотип для Schema.org, иконка) лежат внутри /articles/,
+ * чтобы на боевом сервере не пересекаться с файлами основного сайта (favicon, /covers и т.п.).
+ * Подчёркивание исключает совпадение с адресом статьи (ЧПУ из транслитерации его не содержат).
+ */
+export const MEDIA_PATH = `${ARTICLES_PATH}_media/`;
+
 export function articlePath(slug: string): string {
   return `${ARTICLES_PATH}${slug}/`;
 }

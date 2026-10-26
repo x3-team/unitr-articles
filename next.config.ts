@@ -9,6 +9,7 @@ import type { NextConfig } from "next";
  */
 const isStaticExport = process.env.STATIC_EXPORT === "1";
 const basePath = process.env.BASE_PATH || "";
+const isDemoContent = (process.env.CONTENT_SOURCE || "mock") === "mock";
 
 const nextConfig: NextConfig = {
   output: isStaticExport ? "export" : "standalone",
@@ -22,7 +23,14 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // детерминированный buildId: при неизменных данных повторная сборка демо даёт тот же результат (без лишних публикаций)
   generateBuildId: async () => process.env.BUILD_ID || process.env.GITHUB_SHA?.slice(0, 12) || null,
-  pageExtensions: isStaticExport ? ["static.ts", "tsx", "ts"] : ["server.tsx", "server.ts", "tsx", "ts"],
+  // *.demo.tsx — главная и заглушки страниц основного сайта, только для демо-данных (CONTENT_SOURCE=mock):
+  // на бою эти адреса обслуживает существующий сайт unitr.ru
+  pageExtensions: [
+    ...(isStaticExport ? ["static.ts"] : ["server.tsx", "server.ts"]),
+    ...(isDemoContent ? ["demo.tsx"] : []),
+    "tsx",
+    "ts",
+  ],
   images: { unoptimized: true },
   env: {
     // basePath нужен шаблонам для путей к статике из /public; это не секрет

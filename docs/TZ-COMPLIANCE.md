@@ -2,8 +2,14 @@
 
 Для каждого пункта: где реализовано, как это работает на демо (GitHub Pages) и на боевом сервере, чем проверено.
 Автопроверка — `scripts/check-acceptance.mjs` (исходный HTML без JavaScript + ответы сервера, как в п. 5.2 договора);
-сквозной тест с GraphQL — `tests/e2e/run-graphql-e2e.mjs`. Оба запускаются в CI на каждый коммит,
-проверка демо — после каждой публикации на Pages (отчёт в сводке GitHub Actions).
+сквозные тесты — `tests/e2e/run-graphql-e2e.mjs` (Node.js-вариант на данных из GraphQL) и `tests/e2e/run-apache-e2e.mjs`
+(статический вариант на настоящем Apache поверх SPA с fallback на index.html); WP-плагин — `tests/wp/run-wp-smoke.sh`
+(настоящий WordPress 6.5 в Playground). Всё запускается в CI на каждый коммит, проверка демо — после каждой
+публикации на Pages (отчёт в сводке GitHub Actions).
+
+Боевая выкладка — двумя способами на выбор по итогам разведки сервера ([RUNBOOK.md](RUNBOOK.md)):
+**А** — Node.js (SSR + ISR + вебхук), **Б** — статика + `.htaccess` для хостинга без Node.js. Колонка «Статус»
+ниже относится к обоим, если не сказано иное.
 
 Обозначения: ✅ — выполнено одинаково на демо и на бою; 🟡 — на Pages невозможно технически, сделан ближайший
 аналог, на бою — полноценно (реализовано и проверено в боевом режиме локально и в CI).
@@ -48,7 +54,7 @@
 
 | Требование | Статус | Реализация | Проверка |
 |---|---|---|---|
-| Опубликованная статья появляется в архиве, на 1-й странице и в sitemap ≤ 15 мин | ✅ / 🟡 | Бой: вебхук из WordPress → мгновенно; без вебхука — кеш данных 300 с + ISR 300 с (худший случай 10 мин). Pages: пересборка по расписанию каждые 15 мин (`.github/workflows/pages.yml`) | e2e: публикация |
+| Опубликованная статья появляется в архиве, на 1-й странице и в sitemap ≤ 15 мин | ✅ / 🟡 | Бой А: вебхук из WordPress → мгновенно; без вебхука — кеш данных 300 с + ISR 300 с (худший случай 10 мин). Бой Б: сигнал из WordPress запускает пересборку (2–3 мин), без него — каждые 10 мин (`.github/workflows/deploy-static.yml`). Pages: пересборка по расписанию каждые 15 мин (`.github/workflows/pages.yml`) | e2e: публикация |
 | Изменения и снятие с публикации без правки кода | ✅ | данные только из WordPress, статус `PUBLISH` | e2e: снятие, смена адреса |
 | Ревалидация по событию публикации либо TTL ≤ 15 мин | ✅ | `POST /api/revalidate/` (секрет), `revalidateTag` + `revalidatePath`; WP-плагин шлёт вебхук при публикации/изменении/снятии/удалении, смене рубрик и настроек | e2e, check-acceptance 3 |
 
@@ -71,13 +77,17 @@ GitHub Actions может задерживаться при высокой на�
 
 | Требование | Статус | Реализация | Проверка |
 |---|---|---|---|
-| 404 для несуществующих адресов внутри `/articles/` (не 200 с SPA-оболочкой) | ✅ | `notFound()` в шаблонах → HTTP 404 + `not-found.tsx`; Pages отдаёт `404.html` с кодом 404 | check-acceptance 5 |
-| 301 с `/blog`, `/blog/`, `/poleznye-stati`, `/poleznye-stati/` на `/articles/` с сохранением адреса статьи | ✅ / 🟡 | Бой: `src/middleware.server.ts` — HTTP 301 (`/blog/<slug>/` → `/articles/<slug>/`, плюс прежние slug, `/articles/page/1/`, адреса без слеша). Pages не умеет 301 на произвольный адрес: `/blog` → 301 на `/blog/` (делает сам Pages), там мгновенная переадресация `meta refresh` + `canonical` на `/articles/` (`scripts/postexport.mjs`) | check-acceptance 5 (бой — строго 301) |
+| 404 для несуществующих адресов внутри `/articles/` (не 200 с SPA-оболочкой) | ✅ | А: `notFound()` в шаблонах → HTTP 404 + `not-found.tsx`. Б: `articles/.htaccess` (`R=404` + `ErrorDocument`), правила SPA на раздел не действуют. Pages отдаёт `404.html` с кодом 404 | check-acceptance 5, e2e Apache |
+| 301 с `/blog`, `/blog/`, `/poleznye-stati`, `/poleznye-stati/` на `/articles/` с сохранением адреса статьи | ✅ / 🟡 | Бой А: `src/middleware.server.ts` — HTTP 301; бой Б: те же правила в `.htaccess` (`scripts/export-apache.mjs`), HTTP 301 (`/blog/<slug>/` → `/articles/<slug>/`, плюс прежние slug, `/articles/page/1/`, адреса без слеша). Pages не умеет 301 на произвольный адрес: `/blog` → 301 на `/blog/` (делает сам Pages), там мгновенная переадресация `meta refresh` + `canonical` на `/articles/` (`scripts/postexport.mjs`) | check-acceptance 5 (бой — строго 301) |
 | Выборка через GraphQL на сервере (BFF), токен изолирован от клиентского JS | ✅ | `src/lib/content/graphql.ts` (`server-only`, переменные без `NEXT_PUBLIC_`); BFF для SPA — `/api/articles/` | check-acceptance 5: в JS-бандлах нет токена/адреса WP; e2e: все запросы к WP с токеном и только с сервера |
-| Развёртывание на рабочем сервере unitr.ru | ⏳ | подготовлено: `deploy/` (nginx, systemd/PM2, сборка релиза), `docs/DEPLOY.md` | ждёт доступа к серверу Reg.ru |
+| Развёртывание на рабочем сервере unitr.ru | ⏳ | подготовлено: разведка сервера `deploy/preflight.sh`; вариант А — `deploy/` (nginx/Apache, systemd/PM2, сборка релиза); вариант Б — `.github/workflows/deploy-static.yml` + `scripts/deploy-static.sh` (SFTP/FTP, резервные копии `.htaccess`/robots.txt, блок в `.htaccess` между маркерами). План — [RUNBOOK.md](RUNBOOK.md) | ждёт доступа к серверу Reg.ru; оба варианта проверены локально (Node.js — 58/58, Apache — 54/54) |
 
 ## WordPress (manage.unitr.ru)
 
 Плагин `wp/unitr-articles` (см. `wp/README.md`): рубрика `poleznye-stati`, обложка (featured image), анонс (excerpt),
-SEO title/description (ACF-группа или собственный блок), латинские ЧПУ, GraphQL-поля `unitrSeo`, `unitrOldSlugs`,
-`unitrArticlesSettings`, вебхук ревалидации, страница «Инструменты → Проверка раздела «Статьи»» и `wp unitr-articles check`.
+SEO title/description (ACF-группа или собственный блок), латинские ЧПУ статей раздела (записи других рубрик не
+меняются), GraphQL-поля `unitrSeo`, `unitrOldSlugs`, `unitrArticlesSettings`, вебхук ревалидации (вариант А) или запуск
+пересборки в GitHub Actions (вариант Б), страница «Инструменты → Проверка раздела «Статьи»» и `wp unitr-articles check`.
+Zip — в [Releases](https://github.com/x3-team/unitr-articles/releases); установка через админку —
+[WP-ADMIN-CHECKLIST.md](WP-ADMIN-CHECKLIST.md). Проверен в настоящем WordPress 6.5 (`tests/wp/run-wp-smoke.sh`, 30 проверок);
+поля GraphQL — сквозным тестом фронтенда (WPGraphQL в среде проверки недоступен).

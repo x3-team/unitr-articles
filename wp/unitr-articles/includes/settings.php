@@ -27,8 +27,18 @@ function unitr_articles_secret() {
 	return defined( 'UNITR_REVALIDATE_SECRET' ) ? (string) UNITR_REVALIDATE_SECRET : (string) unitr_articles_setting( 'secret', '' );
 }
 
+function unitr_articles_github_repo() {
+	$repo = defined( 'UNITR_GITHUB_REPO' ) ? UNITR_GITHUB_REPO : (string) unitr_articles_setting( 'github_repo', '' );
+	return preg_match( '#^[\w.-]+/[\w.-]+$#', $repo ) ? $repo : '';
+}
+
+function unitr_articles_github_token() {
+	return defined( 'UNITR_GITHUB_TOKEN' ) ? (string) UNITR_GITHUB_TOKEN : (string) unitr_articles_setting( 'github_token', '' );
+}
+
+/* На init, а не admin_init: ограничения применяются при любом сохранении (админка, REST, WP-CLI) */
 add_action(
-	'admin_init',
+	'init',
 	function () {
 		register_setting(
 			'unitr_articles',
@@ -42,6 +52,11 @@ add_action(
 						'frontend_url'  => esc_url_raw( trim( (string) ( $in['frontend_url'] ?? '' ) ) ),
 						'secret'        => sanitize_text_field( (string) ( $in['secret'] ?? '' ) ),
 						'rewrite_links' => empty( $in['rewrite_links'] ) ? 0 : 1,
+						'github_repo'   => sanitize_text_field( (string) ( $in['github_repo'] ?? '' ) ),
+						// пустое поле не стирает сохранённый токен (он не выводится в форму)
+						'github_token'  => '' !== trim( (string) ( $in['github_token'] ?? '' ) )
+							? sanitize_text_field( (string) $in['github_token'] )
+							: (string) unitr_articles_setting( 'github_token', '' ),
 					);
 				},
 			)
@@ -83,6 +98,16 @@ function unitr_articles_render_settings() {
 					<th scope="row"><label for="ua-secret">Секрет вебхука ревалидации</label></th>
 					<td><input id="ua-secret" type="text" name="<?php echo esc_attr( UNITR_ARTICLES_OPTION ); ?>[secret]" value="<?php echo esc_attr( $o['secret'] ?? '' ); ?>" class="regular-text code" autocomplete="off" <?php disabled( defined( 'UNITR_REVALIDATE_SECRET' ) ); ?>>
 						<p class="description">Должен совпадать с переменной REVALIDATE_SECRET на сервере сайта. При публикации, изменении или снятии статьи сайт обновляется сразу; без вебхука — не позже чем через 15 минут.</p></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="ua-gh-repo">Репозиторий GitHub</label></th>
+					<td><input id="ua-gh-repo" type="text" name="<?php echo esc_attr( UNITR_ARTICLES_OPTION ); ?>[github_repo]" value="<?php echo esc_attr( $o['github_repo'] ?? '' ); ?>" class="regular-text code" placeholder="x3-team/unitr-articles" <?php disabled( defined( 'UNITR_GITHUB_REPO' ) ); ?>>
+						<p class="description">Только для статического варианта сайта (хостинг без Node.js): при изменениях статей запускается пересборка раздела в GitHub Actions. Для варианта с Node.js оставьте пустым.</p></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="ua-gh-token">Токен GitHub</label></th>
+					<td><input id="ua-gh-token" type="password" name="<?php echo esc_attr( UNITR_ARTICLES_OPTION ); ?>[github_token]" value="" class="regular-text code" autocomplete="new-password" placeholder="<?php echo esc_attr( unitr_articles_github_token() ? 'сохранён — введите новый, чтобы заменить' : 'github_pat_…' ); ?>" <?php disabled( defined( 'UNITR_GITHUB_TOKEN' ) ); ?>>
+						<p class="description">Fine-grained token только на этот репозиторий, право Contents: Read and write. Надёжнее задать в wp-config.php: <code>UNITR_GITHUB_TOKEN</code>.</p></td>
 				</tr>
 				<tr>
 					<th scope="row">Ссылки «Просмотреть»</th>

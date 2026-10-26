@@ -20,27 +20,64 @@ function unitr_articles_queue_revalidate( $reason ) {
 }
 
 /**
+ * Отправляет накопленные события туда, где собирается сайт:
+ *  - на сервер сайта (Node.js): POST <сайт>/api/revalidate/ с секретом — кеш раздела сбрасывается сразу;
+ *  - в GitHub Actions (статический вариант без Node.js): repository_dispatch «wp-content-changed» —
+ *    раздел пересобирается и выкладывается за 2–3 минуты, не дожидаясь расписания.
+ * Настроен может быть любой из способов или оба.
+ *
  * @param bool $blocking true — дождаться ответа (для кнопки проверки)
- * @return array|WP_Error
+ * @return array|WP_Error ответ сайта (или GitHub, если сайт не настроен)
  */
 function unitr_articles_send_revalidate( $blocking = false ) {
-	$front  = unitr_articles_frontend_url();
-	$secret = unitr_articles_secret();
-	if ( ! $front || ! $secret ) {
-		return new WP_Error( 'unitr_not_configured', 'Не заданы адрес сайта или секрет вебхука' );
-	}
 	$reasons = $GLOBALS['unitr_articles_revalidate_reasons'];
 	$GLOBALS['unitr_articles_revalidate_reasons'] = array();
+	$result = new WP_Error( 'unitr_not_configured', 'Не настроено обновление сайта: задайте адрес сайта и секрет вебхука или репозиторий GitHub' );
+
+	if ( unitr_articles_github_repo() && unitr_articles_github_token() ) {
+		$result = unitr_articles_send_github_dispatch( $reasons, $blocking );
+	}
+	$front  = unitr_articles_frontend_url();
+	$secret = unitr_articles_secret();
+	if ( $front && $secret ) {
+		$result = wp_remote_post(
+			$front . '/api/revalidate/',
+			array(
+				'timeout'  => $blocking ? 10 : 3,
+				'blocking' => (bool) $blocking,
+				'headers'  => array(
+					'Content-Type'        => 'application/json',
+					'X-Revalidate-Secret' => $secret,
+				),
+				'body'     => wp_json_encode( array( 'reasons' => $reasons ) ),
+			)
+		);
+	}
+	return $result;
+}
+
+/**
+ * @return array|WP_Error ответ GitHub API (204 — пересборка запущена)
+ */
+function unitr_articles_send_github_dispatch( $reasons, $blocking = false ) {
 	return wp_remote_post(
-		$front . '/api/revalidate/',
+		'https://api.github.com/repos/' . unitr_articles_github_repo() . '/dispatches',
 		array(
 			'timeout'  => $blocking ? 10 : 3,
 			'blocking' => (bool) $blocking,
 			'headers'  => array(
-				'Content-Type'        => 'application/json',
-				'X-Revalidate-Secret' => $secret,
+				'Accept'               => 'application/vnd.github+json',
+				'Authorization'        => 'Bearer ' . unitr_articles_github_token(),
+				'X-GitHub-Api-Version' => '2022-11-28',
+				'User-Agent'           => 'unitr-articles-wp',
+				'Content-Type'         => 'application/json',
 			),
-			'body'     => wp_json_encode( array( 'reasons' => $reasons ) ),
+			'body'     => wp_json_encode(
+				array(
+					'event_type'     => 'wp-content-changed',
+					'client_payload' => array( 'reasons' => array_slice( $reasons, 0, 20 ) ),
+				)
+			),
 		)
 	);
 }

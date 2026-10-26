@@ -1,7 +1,7 @@
 import "server-only";
 import { MOCK_ARTICLES, MOCK_RUBRICS, type MockArticle } from "@/content/mock/articles";
 import { MOCK_SITE_PAGES } from "@/content/mock/site-pages";
-import { absoluteUrl } from "../paths";
+import { absoluteUrl, MEDIA_PATH } from "../paths";
 import { slugify } from "../slugify";
 import type { Article, ContentSource, Rubric } from "./types";
 
@@ -41,7 +41,7 @@ function toArticle(m: MockArticle, index: number): Article {
     date: new Date(m.date).toISOString(),
     modified: new Date(m.modified || m.date).toISOString(),
     cover: {
-      url: absoluteUrl(`/covers/${m.cover}.jpg`),
+      url: absoluteUrl(`${MEDIA_PATH}covers/${m.cover}.jpg`),
       width: 1200,
       height: 630,
       alt: m.title,

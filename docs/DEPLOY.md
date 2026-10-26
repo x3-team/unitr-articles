@@ -1,5 +1,9 @@
 # Развёртывание на боевом сервере (unitr.ru, Reg.ru)
 
+> Пошаговый план на день выкладки — [RUNBOOK.md](RUNBOOK.md): разведка сервера (`deploy/preflight.sh`) и выбор
+> варианта. Здесь — справочные подробности по варианту А (Node.js). Вариант Б (хостинг без Node.js: статика +
+> `.htaccess`, выкладка из GitHub Actions) описан в RUNBOOK, раздел 3Б.
+
 Раздел — отдельное Node.js-приложение (Next.js standalone). Веб-сервер направляет в него только адреса раздела,
 `sitemap.xml`, `robots.txt` и старые адреса `/blog`, `/poleznye-stati`; остальное по-прежнему отдаёт текущий сайт.
 
@@ -8,13 +12,15 @@
 - Node.js ≥ 20.9 (рекомендуется 22 LTS), ~300 МБ RAM на процесс.
 - nginx (или Apache с `mod_proxy`) перед приложением.
 - Доступ с сервера к `https://manage.unitr.ru/graphql`.
-- Тариф Reg.ru: VPS или хостинг с поддержкой Node.js. На обычном shared-хостинге без Node.js SSR невозможен —
-  в этом случае нужен VPS (либо отдельный Node-хостинг и проксирование домена).
+- Тариф Reg.ru: VPS или хостинг с поддержкой Node.js и проксированием части адресов. На виртуальном хостинге без
+  Node.js — вариант Б из RUNBOOK (все критерии ТЗ выполняются, обновление раздела за 2–10 минут).
 
 ## 2. WordPress (manage.unitr.ru) — можно сделать заранее
 
 1. Установить и активировать плагины: **WPGraphQL** (обязательно), ACF (если используется на сайте; не обязателен).
-2. Загрузить папку `wp/unitr-articles` в `wp-content/plugins/` и активировать «Юнит-Ресурс — раздел «Статьи»».
+2. «Плагины → Добавить новый → Загрузить плагин» → `unitr-articles-wp-plugin.zip` из
+   [Releases](https://github.com/x3-team/unitr-articles/releases) → активировать «Юнит-Ресурс — раздел «Статьи»»
+   (подробный чеклист без SSH — [WP-ADMIN-CHECKLIST.md](WP-ADMIN-CHECKLIST.md)).
    Рубрика «Полезные статьи» (`poleznye-stati`) создастся автоматически.
 3. В `wp-config.php`:
    ```php
@@ -40,6 +46,8 @@ REVALIDATE_SECONDS=300
 REVALIDATE_SECRET=<то же, что UNITR_REVALIDATE_SECRET>
 # страницы основного сайта, которых нет в WordPress, для sitemap.xml:
 SITE_STATIC_PAGES=[{"path":"/","lastmod":"2026-10-01"},{"path":"/catalog/","lastmod":"2026-10-01"}]
+# robots.txt раздела заменяет robots.txt сайта — перенести сюда его правила (кроме запретов /articles/):
+ROBOTS_EXTRA=Disallow: /search\nDisallow: /cart
 ```
 
 Токен WordPress существует только здесь: в клиентский JavaScript он не попадает (проверяется `scripts/check-acceptance.mjs`).
@@ -61,9 +69,12 @@ sudo systemctl daemon-reload && sudo systemctl enable --now unitr-articles   # �
 
 Каталог `.next/cache` внутри релиза должен быть доступен на запись пользователю сервиса (там хранится ISR-кеш).
 
-## 5. nginx
+## 5. nginx (или Apache)
 
 Подключить `deploy/nginx-unitr.conf` в `server { }` сайта unitr.ru перед общим `location /`, добавить upstream.
+Если на сервере Apache — `deploy/apache-unitr.conf` в `<VirtualHost>` (нужны `mod_proxy`, `mod_proxy_http`).
+Собственные файлы раздела (иконка, og-картинка, логотип для Schema.org) лежат в `/articles/_media/` и не
+пересекаются с файлами основного сайта.
 Обязательно проверить, что в текущей конфигурации:
 - нет `try_files … /index.html`, перехватывающего `/articles/` (из-за этого сейчас несуществующие адреса отдают 200);
 - нет `X-Robots-Tag: noindex` и `Disallow` для `/articles/` в существующем robots.txt — robots.txt теперь отдаёт приложение.

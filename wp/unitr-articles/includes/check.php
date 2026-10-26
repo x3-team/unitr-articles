@@ -107,7 +107,11 @@ function unitr_articles_run_checks() {
 	$front  = unitr_articles_frontend_url();
 	$secret = unitr_articles_secret();
 	$add( $front ? 'ok' : 'error', 'Адрес сайта', $front ? $front : 'Не задан (Настройки → Раздел «Статьи» или UNITR_FRONTEND_URL)' );
-	$add( $secret ? 'ok' : 'warn', 'Секрет вебхука', $secret ? 'Задан' : 'Не задан — сайт обновится только по истечении кеша (≤ 15 минут)' );
+	$github = unitr_articles_github_repo() && unitr_articles_github_token();
+	if ( $github ) {
+		$add( 'ok', 'Пересборка в GitHub Actions', 'Статический вариант: при изменениях запускается пересборка ' . unitr_articles_github_repo() . ' (без неё — по расписанию каждые 10 минут)' );
+	}
+	$add( $secret || $github ? 'ok' : 'warn', 'Секрет вебхука', $secret ? 'Задан' : ( $github ? 'Не нужен (статический вариант)' : 'Не задан — сайт обновится только по истечении кеша (≤ 15 минут)' ) );
 	$add( function_exists( 'wp_remote_post' ) ? 'ok' : 'error', 'Отправка вебхука', 'Срабатывает при публикации, изменении, снятии с публикации, удалении статей и изменении рубрик' );
 	return $r;
 }
@@ -129,7 +133,7 @@ function unitr_articles_render_check() {
 		$res = unitr_articles_send_revalidate( true );
 		$webhook_result = is_wp_error( $res )
 			? array( 'error', $res->get_error_message() )
-			: array( 200 === (int) wp_remote_retrieve_response_code( $res ) ? 'ok' : 'error', 'HTTP ' . wp_remote_retrieve_response_code( $res ) . ': ' . wp_remote_retrieve_body( $res ) );
+			: array( in_array( (int) wp_remote_retrieve_response_code( $res ), array( 200, 204 ), true ) ? 'ok' : 'error', 'HTTP ' . wp_remote_retrieve_response_code( $res ) . ': ' . wp_remote_retrieve_body( $res ) );
 	}
 	$icons = array( 'ok' => '✅', 'warn' => '⚠️', 'error' => '❌', 'info' => 'ℹ️' );
 	?>

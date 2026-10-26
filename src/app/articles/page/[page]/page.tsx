@@ -5,6 +5,7 @@ import { pageMetadata } from "@/lib/meta";
 import { archivePath } from "@/lib/paths";
 import { ARTICLES_CRUMB, HOME_CRUMB } from "@/lib/seo";
 import { ARCHIVE_DESCRIPTION, ARCHIVE_LEAD } from "@/lib/archive-copy";
+import { staticParams } from "@/lib/static-params";
 
 export const revalidate = 300;
 
@@ -18,7 +19,7 @@ function parsePage(raw: string) {
 export async function generateStaticParams() {
   const first = await getArchivePage(1);
   const total = first?.totalPages ?? 1;
-  return Array.from({ length: Math.max(0, total - 1) }, (_, i) => ({ page: String(i + 2) }));
+  return staticParams(Array.from({ length: Math.max(0, total - 1) }, (_, i) => ({ page: String(i + 2) })), { page: "1" });
 }
 
 export async function generateMetadata({ params }: { params: Params }) {

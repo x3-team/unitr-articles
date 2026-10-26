@@ -1,0 +1,52 @@
+# Релиз WP-плагина для manage.unitr.ru: zip, который ставится через «Плагины → Добавить новый → Загрузить плагин».
+# Запуск: тег wp-vX.Y.Z (версия в теге должна совпадать с Version в unitr-articles.php) или вручную.
+name: Release WP plugin
+
+on:
+  push:
+    tags: ["wp-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Версия плагина
+        id: v
+        run: |
+          VERSION=$(sed -n 's/^ \* Version: *//p' wp/unitr-articles/unitr-articles.php | tr -d '\r')
+          CONST=$(sed -n "s/.*UNITR_ARTICLES_VERSION', '\([^']*\)'.*/\1/p" wp/unitr-articles/unitr-articles.php)
+          [ "$VERSION" = "$CONST" ] || { echo "::error::Version ($VERSION) ≠ UNITR_ARTICLES_VERSION ($CONST)"; exit 1; }
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "wp-v${VERSION}" ]; then
+            echo "::error::Тег ${GITHUB_REF_NAME} не совпадает с версией плагина ${VERSION}"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Проверка синтаксиса PHP
+        run: find wp -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Сборка zip
+        run: |
+          cd wp
+          zip -r -X "../unitr-articles-wp-plugin-${{ steps.v.outputs.version }}.zip" unitr-articles
+          cd ..
+          cp "unitr-articles-wp-plugin-${{ steps.v.outputs.version }}.zip" unitr-articles-wp-plugin.zip
+          sha256sum unitr-articles-wp-plugin*.zip > SHA256SUMS
+          unzip -l unitr-articles-wp-plugin.zip
+      - name: Публикация релиза
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: wp-v${{ steps.v.outputs.version }}
+        run: |
+          NOTES="WP-плагин «Юнит-Ресурс — раздел «Статьи»» ${{ steps.v.outputs.version }} для manage.unitr.ru.
+
+          Установка без SSH: «Плагины → Добавить новый → Загрузить плагин» → unitr-articles-wp-plugin.zip → «Установить» → «Активировать».
+          Требуется WPGraphQL ≥ 1.14. Порядок настройки — docs/WP-ADMIN-CHECKLIST.md, подробности — wp/README.md."
+          FILES="unitr-articles-wp-plugin-${{ steps.v.outputs.version }}.zip unitr-articles-wp-plugin.zip SHA256SUMS"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" $FILES --clobber
+          else
+            gh release create "$TAG" $FILES --title "WP-плагин ${{ steps.v.outputs.version }}" --notes "$NOTES" --target "$GITHUB_SHA"
+          fi

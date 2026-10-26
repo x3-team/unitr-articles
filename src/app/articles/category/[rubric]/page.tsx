@@ -6,6 +6,7 @@ import { pageMetadata } from "@/lib/meta";
 import { rubricPath } from "@/lib/paths";
 import { ARTICLES_CRUMB, HOME_CRUMB } from "@/lib/seo";
 import { ARCHIVE_LEAD } from "@/lib/archive-copy";
+import { staticParams } from "@/lib/static-params";
 
 /** Подрубрика раздела. Новые подрубрики WordPress появляются здесь и в sitemap.xml автоматически. */
 export const revalidate = 300;
@@ -13,7 +14,7 @@ export const revalidate = 300;
 type Params = Promise<{ rubric: string }>;
 
 export async function generateStaticParams() {
-  return (await getRubrics()).filter((r) => r.slug !== ARTICLES_CATEGORY).map((r) => ({ rubric: r.slug }));
+  return staticParams((await getRubrics()).filter((r) => r.slug !== ARTICLES_CATEGORY).map((r) => ({ rubric: r.slug })), { rubric: "_" });
 }
 
 async function findRubric(slug: string) {

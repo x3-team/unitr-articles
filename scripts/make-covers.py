@@ -11,7 +11,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "public" / "covers"
+OUT = ROOT / "public" / "articles" / "_media" / "covers"
 OUT.mkdir(parents=True, exist_ok=True)
 
 NAVY = (0, 18, 46)
@@ -220,10 +220,10 @@ def og_default():
     img = Image.alpha_composite(img, ov)
     lg = logo(240)
     img.alpha_composite(lg, (W // 2 - 120, H // 2 - 120))
-    img.convert("RGB").save(ROOT / "public" / "og-default.jpg", quality=86)
+    img.convert("RGB").save(ROOT / "public" / "articles" / "_media" / "og-default.jpg", quality=86)
 
 
 if __name__ == "__main__":
     article_covers()
-    logo(512).convert("RGB").save(ROOT / "public" / "logo-unitr.png")
+    logo(512).convert("RGB").save(ROOT / "public" / "articles" / "_media" / "logo-unitr.png")
     og_default()

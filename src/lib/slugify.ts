@@ -32,3 +32,25 @@ export function slugify(input: string, maxLength = 80): string {
 export function isLatinSlug(slug: string): boolean {
   return /^[a-z0-9-]+$/.test(slug);
 }
+
+/**
+ * ЧПУ сайта для записи WordPress. Латинский адрес используется как есть, кириллический транслитерируется.
+ * WordPress строит адрес из заголовка и обрезает его до 200 байт %-кодировки (≈ 33 буквы кириллицы): если адрес
+ * обрезан и является началом заголовка, ЧПУ строится из полного заголовка (так же поступает WP-плагин раздела).
+ */
+export const WP_SLUG_MAX_ENCODED = 200;
+
+export function latinSlug(wpSlug: string, title: string): string {
+  if (isLatinSlug(wpSlug)) return wpSlug;
+  let decoded = wpSlug;
+  try {
+    decoded = decodeURIComponent(wpSlug);
+  } catch {
+    // некорректная %-последовательность — транслитерируем как есть
+  }
+  const fromSlug = slugify(decoded);
+  const fromTitle = slugify(title);
+  if (!fromSlug) return fromTitle;
+  const truncated = encodeURIComponent(decoded).length > WP_SLUG_MAX_ENCODED - 12;
+  return truncated && fromTitle.startsWith(fromSlug) ? fromTitle : fromSlug;
+}

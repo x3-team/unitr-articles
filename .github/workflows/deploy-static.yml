@@ -1,0 +1,83 @@
+# Боевой статический вариант раздела «Статьи» для хостинга unitr.ru без Node.js (Apache + .htaccess).
+# Используется, только если на сервере нельзя запустить Node.js-приложение (вариант Б в docs/RUNBOOK.md).
+#
+# Включение: переменная репозитория DEPLOY_MODE=static и секреты WP_GRAPHQL_URL, WP_GRAPHQL_TOKEN,
+# DEPLOY_HOST, DEPLOY_USER, DEPLOY_PASSWORD (или DEPLOY_SSH_KEY), DEPLOY_PATH; переменная DEPLOY_PROTOCOL (sftp|ftp).
+# Токен WordPress используется только здесь, при сборке; на хостинг попадает готовый HTML.
+#
+# Автообновление (ТЗ, задача 3): пересборка и выкладка каждые 10 минут; WP-плагин может запускать её сразу
+# после публикации (repository_dispatch «wp-content-changed», см. docs/RUNBOOK.md).
+name: Deploy unitr.ru (static)
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  repository_dispatch:
+    types: [wp-content-changed]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Только показать, что изменится на хостинге"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-static
+  cancel-in-progress: false
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  SITE_URL: ${{ vars.PROD_SITE_URL || 'https://unitr.ru' }}
+
+jobs:
+  deploy:
+    if: vars.DEPLOY_MODE == 'static'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: sudo apt-get install -y -q lftp
+      - name: Сборка из WordPress (manage.unitr.ru)
+        run: npm run build:pages
+        env:
+          STATIC_EXPORT: "1"
+          EXPORT_TARGET: apache
+          ASSET_PREFIX: /articles/_media
+          BASE_PATH: ""
+          BUILD_ID: ${{ github.sha }}
+          CONTENT_SOURCE: graphql
+          WP_GRAPHQL_URL: ${{ secrets.WP_GRAPHQL_URL }}
+          WP_GRAPHQL_TOKEN: ${{ secrets.WP_GRAPHQL_TOKEN }}
+          WP_GRAPHQL_AUTH: ${{ vars.WP_GRAPHQL_AUTH || 'basic' }}
+          ARTICLES_CATEGORY: ${{ vars.ARTICLES_CATEGORY || 'poleznye-stati' }}
+          SITE_STATIC_PAGES: ${{ vars.SITE_STATIC_PAGES }}
+          ROBOTS_EXTRA: ${{ vars.ROBOTS_EXTRA }}
+      - name: Токен не попал в результат сборки
+        run: |
+          if grep -rlF -- "$WP_GRAPHQL_TOKEN" out-apache; then echo "::error::Токен WordPress найден в файлах сайта"; exit 1; fi
+        env:
+          WP_GRAPHQL_TOKEN: ${{ secrets.WP_GRAPHQL_TOKEN }}
+      - name: Выкладка на хостинг
+        run: ./scripts/deploy-static.sh
+        env:
+          DEPLOY_PROTOCOL: ${{ vars.DEPLOY_PROTOCOL || 'sftp' }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      - name: Проверка критериев приёмки на боевом адресе
+        if: github.event_name != 'schedule' && !inputs.dry_run
+        run: node scripts/check-acceptance.mjs "$SITE_URL" --mode=static --report=acceptance-prod.md
+        env:
+          SECRET_VALUES: ${{ secrets.WP_GRAPHQL_TOKEN }}
+      - if: always() && github.event_name != 'schedule'
+        run: cat acceptance-prod.md >> "$GITHUB_STEP_SUMMARY" || true

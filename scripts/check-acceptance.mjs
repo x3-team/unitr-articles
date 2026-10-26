@@ -2,9 +2,11 @@
 // Автоматическая проверка критериев приёмки (Приложение № 4, раздел 5.1 / ТЗ, раздел 6).
 // Проверка — как у Заказчика: по исходному HTML без выполнения JavaScript и по ответам сервера.
 //
-//   node scripts/check-acceptance.mjs <BASE_URL> [--mode=server|pages] [--report=файл.md]
+//   node scripts/check-acceptance.mjs <BASE_URL> [--mode=server|static|pages] [--report=файл.md]
 //
-//   --mode=server  — боевой режим (Node.js): ожидаются настоящие HTTP 301, заголовки кеша и т.д.
+//   --mode=server  — боевой режим (Node.js): ожидаются настоящие HTTP 301, заголовки кеша, вебхук.
+//   --mode=static  — боевой статический вариант (хостинг без Node.js, Apache + .htaccess): настоящие 301 и 404,
+//                    кеш HTML ≤ 900 с, обновление — пересборкой каждые 10 минут (deploy-static.yml).
 //   --mode=pages   — статическое демо на GitHub Pages: 301 эмулируются страницами-переадресациями.
 //   HOME_URL=...   — адрес главной страницы сайта для сравнения title/description (по умолчанию BASE_URL/).
 //   SECRET_VALUES=a,b — значения секретов, которых не должно быть в клиентском JS.
@@ -14,6 +16,9 @@ import fs from "node:fs";
 const args = process.argv.slice(2);
 const BASE = (args.find((a) => !a.startsWith("--")) || "http://localhost:3000").replace(/\/+$/, "");
 const MODE = (args.find((a) => a.startsWith("--mode=")) || "--mode=server").slice(7);
+if (!["server", "static", "pages"].includes(MODE)) throw new Error(`Неизвестный режим: ${MODE}`);
+/** настоящие HTTP 301 / 404 от веб-сервера (Node.js или Apache) */
+const REAL_HTTP = MODE !== "pages";
 const REPORT = (args.find((a) => a.startsWith("--report=")) || "").slice(9);
 const HOME_URL = process.env.HOME_URL || `${BASE}/`;
 const SECRETS = (process.env.SECRET_VALUES || "").split(",").filter(Boolean);
@@ -192,14 +197,18 @@ async function main() {
 
   // ===== 3. Автообновление и кеш =====
   group("3 Автообновление и кеш (≤ 15 минут)");
-  if (MODE === "server") {
+  if (REAL_HTTP) {
     const ttlA = sMaxAge(arch);
     check("Кеш HTML архива ≤ 900 с (Cache-Control)", ttlA !== null && ttlA <= 900, arch.headers.get("cache-control"));
     const sm = await get("/sitemap.xml");
     const ttlS = sMaxAge(sm);
     check("Кеш sitemap.xml ≤ 900 с", ttlS !== null && ttlS <= 900, sm.headers.get("cache-control"));
-    const wh = await fetch(`${BASE}/api/revalidate/`, { method: "POST" });
-    check("Вебхук ревалидации существует и защищён секретом (без секрета → 401)", wh.status === 401, `HTTP ${wh.status}`);
+    if (MODE === "server") {
+      const wh = await fetch(`${BASE}/api/revalidate/`, { method: "POST" });
+      check("Вебхук ревалидации существует и защищён секретом (без секрета → 401)", wh.status === 401, `HTTP ${wh.status}`);
+    } else {
+      check("Обновление: пересборка и выкладка каждые 10 минут (.github/workflows/deploy-static.yml)", true, "", { soft: true });
+    }
   } else {
     check("Pages: кеш CDN ≤ 900 с", (sMaxAge(arch) ?? 0) <= 900, arch.headers.get("cache-control") || "нет заголовка");
     check("Pages: пересборка по расписанию каждые 15 минут (GitHub Actions cron) — см. .github/workflows/pages.yml", true, "на боевом сервере — ISR 300 с + кеш данных 300 с + вебхук", { soft: true });
@@ -226,7 +235,7 @@ async function main() {
   }
   const locSet = new Set(locs);
   check("В карте: главная", locSet.has(`${BASE}/`) || locSet.has(HOME_URL));
-  check("В карте: страницы каталога", locs.some((l) => /\/catalog\//.test(l)), locs.filter((l) => /\/catalog\//.test(l)).length + " адресов", { soft: MODE === "server" });
+  check("В карте: страницы каталога", locs.some((l) => /\/catalog\//.test(l)), locs.filter((l) => /\/catalog\//.test(l)).length + " адресов", { soft: REAL_HTTP });
   check("В карте: раздел /articles/", locSet.has(`${BASE}/articles/`));
   const missingArticles = articleUrls.filter((u) => !locSet.has(u));
   check(`В карте: все статьи (${articleUrls.length})`, missingArticles.length === 0, missingArticles.slice(0, 3).join(", "));
@@ -256,7 +265,7 @@ async function main() {
   }
   const firstSlug = articleUrls[0] ? new URL(articleUrls[0]).pathname.split("/").filter(Boolean).pop() : "x";
   const legacy = ["/blog", "/blog/", "/poleznye-stati", "/poleznye-stati/"];
-  if (MODE === "server") {
+  if (REAL_HTTP) {
     for (const p of legacy) {
       const r = await get(p);
       check(`${p} → 301 /articles/`, r.status === 301 && abs(r.location || "") === `${BASE}/articles/`, `HTTP ${r.status} → ${r.location}`);
@@ -296,7 +305,7 @@ async function main() {
   const lines = [
     `# Проверка критериев приёмки — ${BASE}`,
     "",
-    `Режим: **${MODE === "server" ? "боевой (Node.js SSR)" : "статическое демо (GitHub Pages)"}** · ${new Date().toISOString()} · проверок: ${results.length}, не пройдено: ${failed.length}`,
+    `Режим: **${{ server: "боевой (Node.js SSR)", static: "боевой статический (Apache)", pages: "статическое демо (GitHub Pages)" }[MODE]}** · ${new Date().toISOString()} · проверок: ${results.length}, не пройдено: ${failed.length}`,
     "",
   ];
   let g = "";

@@ -7,11 +7,15 @@
 - **Боевой режим:** Next.js 15 (SSR + ISR) на Node.js, данные — WPGraphQL `manage.unitr.ru`
 - **WordPress:** плагин [`wp/unitr-articles`](wp/README.md) — рубрика, поля SEO, латинские ЧПУ, GraphQL-поля, вебхук, проверка
 - **Соответствие ТЗ:** [docs/TZ-COMPLIANCE.md](docs/TZ-COMPLIANCE.md) — каждый пункт → реализация → как проверено
-- **Развёртывание на бою:** [docs/DEPLOY.md](docs/DEPLOY.md)
+- **Выкладка на unitr.ru — пошагово:** [docs/RUNBOOK.md](docs/RUNBOOK.md) (разведка сервера `deploy/preflight.sh`,
+  вариант А — Node.js, вариант Б — статика + `.htaccess` для хостинга без Node.js), подробности — [docs/DEPLOY.md](docs/DEPLOY.md)
+- **WordPress без SSH:** [docs/WP-ADMIN-CHECKLIST.md](docs/WP-ADMIN-CHECKLIST.md); zip плагина — в
+  [Releases](https://github.com/x3-team/unitr-articles/releases) (тег `wp-v<версия>` собирает его автоматически)
 
 ## Как устроено
 
-Один код собирается в двух режимах:
+Один код собирается в трёх режимах (третий — статический вариант для хостинга без Node.js, `EXPORT_TARGET=apache`,
+см. [RUNBOOK](docs/RUNBOOK.md), вариант Б):
 
 | | Боевой сервер (`npm run build`) | Демо на GitHub Pages (`npm run build:pages`) |
 |---|---|---|
@@ -41,8 +45,10 @@ src/
   lib/content/                           источники данных: graphql.ts (WordPress), mock.ts (демо)
   lib/sitemap.ts, lib/seo.ts, lib/meta.ts
 wp/unitr-articles/                       плагин WordPress
-scripts/check-acceptance.mjs             автопроверка критериев приёмки (раздел 6 ТЗ)
-tests/                                   юнит-тесты и сквозной тест с GraphQL-источником
+scripts/check-acceptance.mjs             автопроверка критериев приёмки (раздел 6 ТЗ): --mode=server|static|pages
+scripts/export-apache.mjs, deploy-static.sh, merge-htaccess.mjs   статический вариант (Apache + .htaccess, SFTP/FTP)
+deploy/                                  preflight.sh, nginx/Apache, systemd/PM2, сборка релиза
+tests/                                   юнит-тесты, сквозные тесты (GraphQL, Apache), проверка WP-плагина
 ```
 
 ## Команды
@@ -52,6 +58,8 @@ npm ci
 npm run dev                                   # разработка (демо-данные)
 npm test                                      # юнит-тесты
 node tests/e2e/run-graphql-e2e.mjs            # сквозной тест: публикация/снятие/смена адреса через GraphQL
+node tests/e2e/run-apache-e2e.mjs             # статический вариант на настоящем Apache поверх SPA (нужен apache2)
+tests/wp/run-wp-smoke.sh                      # WP-плагин в настоящем WordPress (Playground + SQLite)
 
 # боевая сборка и запуск
 CONTENT_SOURCE=graphql SITE_URL=https://unitr.ru WP_GRAPHQL_TOKEN=... REVALIDATE_SECRET=... npm run build

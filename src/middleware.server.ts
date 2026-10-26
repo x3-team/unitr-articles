@@ -17,7 +17,8 @@ let redirectsCache: { at: number; map: Record<string, string> } | null = null;
 async function oldSlugMap(req: NextRequest): Promise<Record<string, string>> {
   if (redirectsCache && Date.now() - redirectsCache.at < REDIRECTS_TTL_MS) return redirectsCache.map;
   try {
-    const origin = process.env.INTERNAL_ORIGIN || req.nextUrl.origin;
+    // запрос к самому приложению напрямую, минуя nginx: снаружи /api/redirects/ не проксируется
+    const origin = process.env.INTERNAL_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3000}`;
     const res = await fetch(`${origin}/api/redirects/`, { headers: { "x-middleware-internal": "1" } });
     const map = res.ok ? ((await res.json()) as Record<string, string>) : {};
     redirectsCache = { at: Date.now(), map };

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Юнит-Ресурс — раздел «Статьи»
  * Description: Подготовка WordPress (manage.unitr.ru) для раздела /articles/ сайта unitr.ru: рубрика poleznye-stati, SEO-поля статьи, латинские ЧПУ, поля WPGraphQL (unitrSeo, unitrOldSlugs, unitrArticlesSettings), вебхук ревалидации фронтенда и страница проверки.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: X3 Team
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'UNITR_ARTICLES_VERSION', '1.0.0' );
+define( 'UNITR_ARTICLES_VERSION', '1.1.0' );
 define( 'UNITR_ARTICLES_CATEGORY', 'poleznye-stati' );
 define( 'UNITR_ARTICLES_CATEGORY_NAME', 'Полезные статьи' );
 define( 'UNITR_ARTICLES_OPTION', 'unitr_articles_settings' );
@@ -44,7 +44,7 @@ function unitr_articles_activate() {
 				'per_page'       => 10,
 				'frontend_url'   => 'https://unitr.ru',
 				'secret'         => wp_generate_password( 40, false ),
-				'rewrite_links'  => 1,
+				'rewrite_links'  => 0, // включить после запуска раздела на unitr.ru, иначе «Просмотреть» ведёт на ещё несуществующий адрес
 			)
 		);
 	}
@@ -103,24 +103,30 @@ add_action(
  * Латинские ЧПУ статей (ТЗ, п. 1.2). Если установлен Cyr-To-Lat — работает он.
  * ---------------------------------------------------------------------- */
 
-add_filter(
-	'wp_insert_post_data',
-	function ( $data, $postarr ) {
-		if ( 'post' !== $data['post_type'] || in_array( $data['post_status'], array( 'auto-draft', 'inherit' ), true ) ) {
-			return $data;
+/*
+ * Только для статей раздела: записи других рубрик (новости и т.п.) не трогаем — их адреса может использовать
+ * основной сайт. wp_after_insert_post срабатывает после сохранения рубрик (в т.ч. из блочного редактора,
+ * где рубрики сохраняются отдельным шагом), поэтому принадлежность к разделу уже известна.
+ */
+add_action(
+	'wp_after_insert_post',
+	function ( $post_id, $post ) {
+		if ( 'post' !== $post->post_type || in_array( $post->post_status, array( 'auto-draft', 'inherit', 'trash' ), true ) ) {
+			return;
 		}
-		$slug = urldecode( (string) $data['post_name'] );
-		if ( '' !== $slug && preg_match( '/^[a-z0-9-]+$/', $slug ) ) {
-			return $data;
+		$slug = urldecode( (string) $post->post_name );
+		if ( '' === $slug || preg_match( '/^[a-z0-9-]+$/', $slug ) || ! unitr_articles_is_article( $post ) ) {
+			return;
 		}
-		$source = '' !== $slug ? $slug : (string) $data['post_title'];
-		$latin  = unitr_articles_slugify( $source );
+		$latin = unitr_articles_latin_slug( $slug, $post->post_title );
 		if ( '' === $latin ) {
-			return $data;
+			return;
 		}
-		$post_id           = isset( $postarr['ID'] ) ? (int) $postarr['ID'] : 0;
-		$data['post_name'] = wp_unique_post_slug( $latin, $post_id, $data['post_status'], $data['post_type'], (int) $data['post_parent'] );
-		return $data;
+		$latin = wp_unique_post_slug( $latin, $post_id, $post->post_status, $post->post_type, (int) $post->post_parent );
+		// напрямую в таблицу: повторное сохранение записи запустило бы все хуки ещё раз
+		global $wpdb;
+		$wpdb->update( $wpdb->posts, array( 'post_name' => $latin ), array( 'ID' => $post_id ) );
+		clean_post_cache( $post_id );
 	},
 	20,
 	2

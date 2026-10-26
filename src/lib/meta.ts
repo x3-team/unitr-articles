@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_LOCALE, SITE_NAME } from "./config";
-import { absoluteUrl } from "./paths";
+import { absoluteUrl, MEDIA_PATH } from "./paths";
 
 /** Общие метатеги: canonical на саму страницу, Open Graph, явное разрешение индексации */
 export function pageMetadata(opts: {
@@ -12,7 +12,7 @@ export function pageMetadata(opts: {
   article?: { publishedTime: string; modifiedTime: string; authors: string[]; section: string };
 }): Metadata {
   const url = absoluteUrl(opts.path);
-  const image = opts.image || { url: absoluteUrl("/og-default.jpg"), width: 1200, height: 630, alt: SITE_NAME };
+  const image = opts.image || { url: absoluteUrl(`${MEDIA_PATH}og-default.jpg`), width: 1200, height: 630, alt: SITE_NAME };
   return {
     title: { absolute: opts.title },
     description: opts.description,

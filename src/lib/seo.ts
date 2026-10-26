@@ -1,5 +1,5 @@
 import { ORGANIZATION, SITE_NAME } from "./config";
-import { absoluteUrl, ARTICLES_PATH, articlePath } from "./paths";
+import { absoluteUrl, ARTICLES_PATH, articlePath, MEDIA_PATH } from "./paths";
 import type { Article } from "./content/types";
 
 export interface Crumb {
@@ -28,7 +28,7 @@ const publisher = () => ({
   name: ORGANIZATION.name,
   alternateName: SITE_NAME,
   url: absoluteUrl("/"),
-  logo: { "@type": "ImageObject", url: absoluteUrl("/logo-unitr.png"), width: 512, height: 512 },
+  logo: { "@type": "ImageObject", url: absoluteUrl(`${MEDIA_PATH}logo-unitr.png`), width: 512, height: 512 },
 });
 
 export function articleLd(a: Article, description: string) {

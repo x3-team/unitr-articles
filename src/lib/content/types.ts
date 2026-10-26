@@ -25,6 +25,8 @@ export interface Article extends ArticleSummary {
   /** SEO-поля, заполняемые Заказчиком в WordPress. Пустые — подставляются заголовок/excerpt. */
   seo: { title: string; description: string };
   categories: { slug: string; name: string }[];
+  /** Адрес записи в WordPress как есть (может быть %-кодированной кириллицей), если он отличается от ЧПУ сайта */
+  wpSlug?: string;
 }
 
 export interface Paginated<T> {

@@ -31,3 +31,19 @@ function unitr_articles_slugify( $input, $max_length = 80 ) {
 	}
 	return $s;
 }
+
+/**
+ * Латинский адрес статьи из адреса WordPress — так же, как во фронтенде (latinSlug в src/lib/slugify.ts).
+ * WordPress обрезает кириллический адрес до 200 байт %-кодировки (≈ 33 буквы): если адрес обрезан и является
+ * началом заголовка, транслитерируется полный заголовок; иначе (в т.ч. адрес, введённый вручную) — сам адрес.
+ */
+function unitr_articles_latin_slug( $wp_slug, $title ) {
+	$decoded    = rawurldecode( (string) $wp_slug );
+	$from_slug  = unitr_articles_slugify( $decoded );
+	$from_title = unitr_articles_slugify( (string) $title );
+	if ( '' === $from_slug ) {
+		return $from_title;
+	}
+	$truncated = strlen( rawurlencode( $decoded ) ) > 200 - 12;
+	return $truncated && 0 === strpos( $from_title, $from_slug ) ? $from_title : $from_slug;
+}

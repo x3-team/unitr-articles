@@ -5,11 +5,12 @@ import "@fontsource/inter/latin-400.css";
 import "@fontsource/inter/latin-500.css";
 import "./globals.css";
 import { SITE_NAME, SITE_URL } from "@/lib/config";
+import { MEDIA_PATH } from "@/lib/paths";
 
 export const metadata: Metadata = {
   metadataBase: new URL(`${SITE_URL}/`),
   applicationName: SITE_NAME,
-  icons: { icon: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/favicon.svg` },
+  icons: { icon: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${MEDIA_PATH}favicon.svg` },
   formatDetection: { telephone: false },
 };
 

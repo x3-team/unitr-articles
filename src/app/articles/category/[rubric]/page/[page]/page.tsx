@@ -6,6 +6,7 @@ import { pageMetadata } from "@/lib/meta";
 import { rubricPath } from "@/lib/paths";
 import { ARTICLES_CRUMB, HOME_CRUMB } from "@/lib/seo";
 import { ARCHIVE_LEAD } from "@/lib/archive-copy";
+import { staticParams } from "@/lib/static-params";
 
 export const revalidate = 300;
 
@@ -19,7 +20,7 @@ export async function generateStaticParams() {
     const first = await getArchivePage(1, r.slug);
     for (let p = 2; p <= (first?.totalPages ?? 1); p++) out.push({ rubric: r.slug, page: String(p) });
   }
-  return out;
+  return staticParams(out, { rubric: "_", page: "1" });
 }
 
 async function findRubric(slug: string) {
