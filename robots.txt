@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /unitr-articles/articles/
+Disallow: /unitr-articles/api/
+
+Sitemap: https://x3-team.github.io/unitr-articles/sitemap.xml
