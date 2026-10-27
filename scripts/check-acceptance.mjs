@@ -10,6 +10,7 @@
 //   --mode=pages   — статическое демо на GitHub Pages: 301 эмулируются страницами-переадресациями.
 //   HOME_URL=...   — адрес главной страницы сайта для сравнения title/description (по умолчанию BASE_URL/).
 //   SECRET_VALUES=a,b — значения секретов, которых не должно быть в клиентском JS.
+//   BASIC_AUTH=логин:пароль — для тестового стенда, закрытого паролем.
 
 import fs from "node:fs";
 
@@ -22,6 +23,8 @@ const REAL_HTTP = MODE !== "pages";
 const REPORT = (args.find((a) => a.startsWith("--report=")) || "").slice(9);
 const HOME_URL = process.env.HOME_URL || `${BASE}/`;
 const SECRETS = (process.env.SECRET_VALUES || "").split(",").filter(Boolean);
+// тестовый стенд, закрытый паролем (Basic Auth): BASIC_AUTH=логин:пароль
+const AUTH = process.env.BASIC_AUTH ? { Authorization: `Basic ${Buffer.from(process.env.BASIC_AUTH).toString("base64")}` } : {};
 
 const results = [];
 let currentGroup = "";
@@ -34,7 +37,7 @@ async function get(path, { redirect = "manual" } = {}) {
   const url = path.startsWith("http") ? path : `${BASE}${path}`;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const res = await fetch(url, { redirect, headers: { "User-Agent": "unitr-acceptance-check/1.0 (no-js)" } });
+      const res = await fetch(url, { redirect, headers: { "User-Agent": "unitr-acceptance-check/1.0 (no-js)", ...AUTH } });
       const body = await res.text();
       return { url, status: res.status, headers: res.headers, body, location: res.headers.get("location") };
     } catch (e) {

@@ -66,6 +66,7 @@ if cmp -s "$TMP/.htaccess" "$TMP/.htaccess.new"; then
 elif [ -z "$DRY" ]; then
   lf "cd $DEPLOY_PATH; put $TMP/.htaccess.new -o .htaccess"
 else
-  diff -u "$TMP/.htaccess" "$TMP/.htaccess.new" || true
+  # содержимое .htaccess сайта в лог не выводится (лог публичный) — только объём изменений
+  echo "   будет изменено строк: $(diff "$TMP/.htaccess" "$TMP/.htaccess.new" | grep -c '^[<>]'); правила сайта вне блока сохраняются"
 fi
 echo "Готово."
