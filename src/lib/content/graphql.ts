@@ -1,7 +1,7 @@
 import "server-only";
 import { ARTICLES_CATEGORY } from "../config";
 import type { Article, ContentSource, Rubric, SitePage } from "./types";
-import { decodeEntities, stripTags } from "./wp-text";
+import { decodeEntities, demoteH1, stripTags } from "./wp-text";
 
 /**
  * Источник данных — WordPress (manage.unitr.ru) через WPGraphQL.
@@ -111,7 +111,7 @@ export function mapPost(p: WpPost): Article {
           alt: img.altText || decodeEntities(p.title || ""),
         }
       : null,
-    contentHtml: p.content || "",
+    contentHtml: demoteH1(p.content || ""),
     author: { name: p.author?.node?.name || "Юнит-Ресурс" },
     seo: { title: p.unitrSeo?.title || "", description: p.unitrSeo?.description || "" },
     categories: p.categories?.nodes || [],

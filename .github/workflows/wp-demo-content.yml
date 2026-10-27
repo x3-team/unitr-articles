@@ -1,0 +1,63 @@
+# Тестовые статьи в рубрике poleznye-stati на manage.unitr.ru — для приёмки раздела на стенде (test.unitr.ru).
+#   seed   — 12 опубликованных статей + 1 черновик (обложка, excerpt, H2/H3, SEO-поля, латинский ЧПУ);
+#            повторный запуск обновляет их, а не дублирует;
+#   status — сколько статей в рубрике и какие из них тестовые;
+#   remove — удалить только тестовые статьи (мета _unitr_demo, метка test-unitr-demo) и их обложки.
+# После seed/remove запускается выкладка раздела на стенд, чтобы он сразу показал изменения.
+# В лог (репозиторий публичный) выводятся только ярлыки тестовых статей и счётчики.
+name: WP test content (manage.unitr.ru)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [seed, status, remove]
+        default: status
+      allow_spa:
+        description: Загрузить, даже если боевой SPA упоминает рубрику poleznye-stati (только после согласования)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: wp-demo-content
+  cancel-in-progress: false
+
+jobs:
+  content:
+    runs-on: ubuntu-latest
+    env:
+      SSHPASS: ${{ secrets.HOSTING_SSH_PASSWORD }}
+      SSH_HOST: ${{ secrets.HOSTING_SSH_HOST }}
+      SSH_USER: ${{ secrets.HOSTING_SSH_USER }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: sudo apt-get install -y -q lftp sshpass >/dev/null
+      - name: Статьи и обложки
+        run: |
+          node --import tsx scripts/wp-demo-export.ts out-demo 12
+          cp deploy/hosting/wp-demo-content.php deploy/hosting/wp-demo-content.sh out-demo/
+      - name: Загрузка на хостинг
+        run: |
+          lftp -u "$SSH_USER,$SSHPASS" -e "set sftp:auto-confirm yes; set cmd:fail-exit yes; mkdir -p -f tmp; mirror -R --delete --no-perms out-demo tmp/unitr-demo; bye" "sftp://$SSH_HOST"
+      - name: WP-CLI (${{ inputs.action }})
+        env:
+          ACTION: ${{ inputs.action }}
+          ALLOW_SPA: ${{ inputs.allow_spa && 'yes' || '' }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
+            "DEMO_MODE=$ACTION ALLOW_SPA=$ALLOW_SPA bash tmp/unitr-demo/wp-demo-content.sh"
+      - name: Обновить стенд
+        if: inputs.action != 'status'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy-static.yml --repo "$GITHUB_REPOSITORY" -f target=test

@@ -15,3 +15,8 @@ export function decodeEntities(s: string): string {
 export function stripTags(html: string): string {
   return decodeEntities(html.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim().replace(/\s*\[…\]$/, "…");
 }
+
+/** H1 на странице статьи — только заголовок статьи; заголовки первого уровня из текста WordPress становятся H2 */
+export function demoteH1(html: string): string {
+  return html.replace(/<(\/?)h1(?=[\s>])/gi, "<$1h2");
+}

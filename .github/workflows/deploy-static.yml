@@ -107,7 +107,7 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
       - name: Проверка критериев приёмки (Прил. № 4)
         if: github.event_name != 'schedule' && !inputs.dry_run
-        run: node scripts/check-acceptance.mjs "$SITE_URL" --mode=static --report=acceptance.md
+        run: node scripts/check-acceptance.mjs "$SITE_URL" --mode=static --report=acceptance.md ${{ matrix.target == 'test' && '--stand' || '' }}
         env:
           SECRET_VALUES: ${{ secrets.WP_GRAPHQL_TOKEN }}
           BASIC_AUTH: ${{ matrix.target == 'test' && secrets.STAND_AUTH || '' }}

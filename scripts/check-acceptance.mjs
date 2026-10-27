@@ -11,6 +11,9 @@
 //   HOME_URL=...   — адрес главной страницы сайта для сравнения title/description (по умолчанию BASE_URL/).
 //   SECRET_VALUES=a,b — значения секретов, которых не должно быть в клиентском JS.
 //   BASIC_AUTH=логин:пароль — для тестового стенда, закрытого паролем.
+//   --stand        — тестовый стенд (включается и при BASIC_AUTH): стенд закрыт от индексации заголовком
+//                    X-Robots-Tag: noindex до показа заказчику — это не ошибка. meta robots в HTML раздела
+//                    (то, что поедет на прод) проверяется строго. На production проверка noindex строгая целиком.
 
 import fs from "node:fs";
 
@@ -25,6 +28,7 @@ const HOME_URL = process.env.HOME_URL || `${BASE}/`;
 const SECRETS = (process.env.SECRET_VALUES || "").split(",").filter(Boolean);
 // тестовый стенд, закрытый паролем (Basic Auth): BASIC_AUTH=логин:пароль
 const AUTH = process.env.BASIC_AUTH ? { Authorization: `Basic ${Buffer.from(process.env.BASIC_AUTH).toString("base64")}` } : {};
+const STAND = args.includes("--stand") || !!process.env.BASIC_AUTH;
 
 const results = [];
 let currentGroup = "";
@@ -87,8 +91,10 @@ const isArticleHref = (href) => {
   const rest = p.slice(articlesPrefix.length).replace(/\/$/, "");
   return rest && !rest.includes("/") && rest !== "page" && rest !== "category";
 };
-const noindex = (res) =>
-  /noindex|none/i.test(metaContent(res.body, "robots") || "") || /noindex|none/i.test(res.headers.get("x-robots-tag") || "");
+const metaNoindex = (res) => /noindex|none/i.test(metaContent(res.body, "robots") || "");
+const headerNoindex = (res) => /noindex|none/i.test(res.headers.get("x-robots-tag") || "");
+// на стенде X-Robots-Tag: noindex задан намеренно (закрыт до показа заказчику), в счёт идёт только meta robots
+const noindex = (res) => metaNoindex(res) || (!STAND && headerNoindex(res));
 const sMaxAge = (res) => {
   const cc = res.headers.get("cache-control") || "";
   const m = /s-maxage=(\d+)/.exec(cc) || /max-age=(\d+)/.exec(cc);
@@ -96,7 +102,7 @@ const sMaxAge = (res) => {
 };
 
 async function main() {
-  console.log(`Проверка ${BASE} (режим: ${MODE})\n`);
+  console.log(`Проверка ${BASE} (режим: ${MODE}${STAND ? ", тестовый стенд" : ""})\n`);
 
   // ===== 1. Архив /articles/ =====
   group("1.1 Страница архива /articles/");
@@ -154,7 +160,7 @@ async function main() {
     const r = await get(url);
     const problems = [];
     if (r.status !== 200) problems.push(`HTTP ${r.status}`);
-    if (h1Of(r.body).length !== 1) problems.push("H1");
+    if (h1Of(r.body).length !== 1) problems.push(`H1: ${h1Of(r.body).length}`);
     if (canonicalOf(r.body) !== url) problems.push(`canonical ${canonicalOf(r.body)}`);
     if (!titleOf(r.body)) problems.push("title");
     if (!(metaContent(r.body, "description") || "").trim()) problems.push("description");
@@ -258,7 +264,13 @@ async function main() {
   const blocks = disallows.filter((d) => `${articlesPrefix}x/`.startsWith(d) || articlesPrefix.startsWith(d));
   check("robots.txt: нет запретов для /articles/", blocks.length === 0, `Disallow: ${disallows.join(", ") || "—"}`);
   const sample = [arch, ...(await Promise.all(articleUrls.slice(0, 3).map((u) => get(u))))];
-  check("Нет noindex (meta robots и X-Robots-Tag) на страницах раздела", sample.every((r) => !noindex(r)), sample.map((r) => `${r.headers.get("x-robots-tag") || "—"} / ${metaContent(r.body, "robots") || "—"}`).join("; "));
+  const robotsDetails = sample.map((r) => `${r.headers.get("x-robots-tag") || "—"} / ${metaContent(r.body, "robots") || "—"}`).join("; ");
+  if (STAND) {
+    check("Нет noindex в meta robots на страницах раздела", sample.every((r) => !metaNoindex(r)), robotsDetails);
+    check("Стенд закрыт от индексации (X-Robots-Tag: noindex до показа заказчику; на production проверяется отсутствие)", true, sample.some(headerNoindex) ? "X-Robots-Tag: noindex — есть" : "X-Robots-Tag не задан", { soft: true });
+  } else {
+    check("Нет noindex (meta robots и X-Robots-Tag) на страницах раздела", sample.every((r) => !noindex(r)), robotsDetails);
+  }
 
   // ===== 5. 404, 301, токен =====
   group("5 Маршрутизация, ошибки, безопасность");
@@ -308,7 +320,7 @@ async function main() {
   const lines = [
     `# Проверка критериев приёмки — ${BASE}`,
     "",
-    `Режим: **${{ server: "боевой (Node.js SSR)", static: "боевой статический (Apache)", pages: "статическое демо (GitHub Pages)" }[MODE]}** · ${new Date().toISOString()} · проверок: ${results.length}, не пройдено: ${failed.length}`,
+    `Режим: **${{ server: "боевой (Node.js SSR)", static: "боевой статический (Apache)", pages: "статическое демо (GitHub Pages)" }[MODE]}${STAND ? ", тестовый стенд" : ""}** · ${new Date().toISOString()} · проверок: ${results.length}, не пройдено: ${failed.length}`,
     "",
   ];
   let g = "";
