@@ -132,8 +132,22 @@ async function main() {
     if (INSPECT) {
       console.log(`== Мобильная шапка (меню открыто: ${opened})\n` + (await mp.evaluate(dump, { selector: "header, nav, [class*=menu i], [role=dialog]", limit: 5, max: 7 })));
     }
-    const mItems = (await menuState(mp)).map((i) => i.text);
-    check("Мобильное меню главной: «Статьи» видна после открытия меню", opened && mItems.includes("Статьи") && mItems.lastIndexOf("Конфигураторы") < mItems.lastIndexOf("Статьи"), `меню открыто: ${opened}; ${mItems.join(" · ") || "пунктов не найдено"}`);
+    // в мобильной шапке нет «Каталог» / «Конфигураторы»: меню — рубрики каталога и ссылки конфигураторов,
+    // «Статьи» — после ссылок конфигураторов
+    const mob1 = await mp.evaluate(() => {
+      const vis = (el) => el.getClientRects().length && getComputedStyle(el).visibility !== "hidden";
+      const all = [...document.querySelectorAll("header a[href]")].filter(vis);
+      const art = all.findIndex((a) => /\/articles\/$/.test(a.getAttribute("href")) && a.textContent.trim() === "Статьи");
+      const cfg = all.map((a) => a.getAttribute("href")).filter((h) => /\/configurators/.test(h)).length;
+      const lastCfg = all.map((a) => /\/configurators/.test(a.getAttribute("href"))).lastIndexOf(true);
+      return { art, cfg, lastCfg, items: all.map((a) => a.textContent.trim()).join(" · ") };
+    });
+    check("Мобильное меню главной: «Статьи» видна после открытия меню, после ссылок конфигураторов", opened && mob1.art > -1 && mob1.art > mob1.lastCfg, `меню открыто: ${opened}; ${mob1.items || "ссылок не найдено"}`);
+    if (mob1.art > -1) {
+      const ml = mp.locator('header a[href$="/articles/"]', { hasText: "Статьи" }).first();
+      const [r] = await Promise.all([mp.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => null), ml.click({ timeout: 10_000 }).catch(() => null)]);
+      check("Мобильное меню: клик по «Статьи» → /articles/ (200)", new URL(mp.url()).pathname === "/articles/" && r?.status() === 200, `${mp.url()} HTTP ${r?.status()}`);
+    }
     await mob.close();
   } finally {
     await browser.close();

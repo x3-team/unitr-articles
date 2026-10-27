@@ -2,10 +2,12 @@
  * Пункт «Статьи» в шапке SPA unitr.ru (ТЗ, п. 2) — без пересборки SPA.
  * Подключается в index.html сайта блоком «unitr-articles» (scripts/merge-spa-index.mjs при выкладке раздела).
  *
- * Рядом с каждой ссылкой «Конфигураторы» (десктоп и мобильное меню) ставится ссылка «Статьи» → /articles/
- * с теми же классами оформления. Шапка SPA перерисовывается при переходах и открытии меню — пункт
- * восстанавливается при каждом изменении DOM. Обычная ссылка: переход в раздел — полной загрузкой страницы,
- * HTML раздела отдаёт веб-сервер (SSR/пререндер), а не SPA.
+ * Десктоп: в шапке ссылка «Статьи» → /articles/ сразу после «Конфигураторы», с тем же оформлением.
+ * Мобильная версия: в шапке нет «Каталог» / «Конфигураторы», меню (бургер) — список рубрик каталога и ссылок
+ * конфигураторов; «Статьи» ставится отдельной группой после конфигураторов, с оформлением их ссылок.
+ * Шапка SPA перерисовывается при переходах, открытии меню и смене ширины окна — пункт восстанавливается
+ * при каждом изменении DOM. Обычная ссылка: переход в раздел — полной загрузкой страницы, HTML раздела
+ * отдаёт веб-сервер (пререндер), а не SPA.
  * Запасная навигация из исходного HTML (data-unitr-prenav, для роботов без JS) убирается после отрисовки шапки.
  */
 (function () {
@@ -15,47 +17,85 @@
   function text(el) {
     return (el.textContent || "").replace(/\s+/g, " ").trim();
   }
-  function isLink(a, path, label) {
-    return text(a) === label && a.host === location.host && a.pathname.replace(/\/$/, "") === path;
+  function path(a) {
+    return a.host === location.host ? a.pathname.replace(/\/$/, "") : "";
+  }
+  function headerLinks() {
+    var out = [];
+    var all = document.querySelectorAll("header a[href]");
+    for (var i = 0; i < all.length; i++) if (!all[i].hasAttribute(MARK)) out.push(all[i]);
+    return out;
+  }
+  function link(className) {
+    var a = document.createElement("a");
+    a.setAttribute("href", HREF);
+    a.textContent = "Статьи";
+    a.className = className;
+    return a;
+  }
+  function remove(el) {
+    if (el.parentNode) el.parentNode.removeChild(el);
   }
 
   function sync() {
-    var links = document.querySelectorAll("a[href]");
     var configs = [];
     var catalogs = [];
-    for (var i = 0; i < links.length; i++) {
-      if (links[i].hasAttribute(MARK) || links[i].closest("[data-unitr-prenav]")) continue;
-      if (isLink(links[i], "/configurators", "Конфигураторы")) configs.push(links[i]);
-      else if (isLink(links[i], "/catalog", "Каталог")) catalogs.push(links[i]);
-    }
-    // пункт, оставшийся без соседа после перерисовки шапки, убираем (новый поставится рядом с новым «Конфигураторы»)
-    var own = document.querySelectorAll("a[" + MARK + "]");
-    for (var o = 0; o < own.length; o++) {
-      var prev = own[o].previousElementSibling;
-      if (!prev || configs.indexOf(prev) < 0) own[o].parentNode.removeChild(own[o]);
-    }
+    var groups = [];
+    headerLinks().forEach(function (a) {
+      var p = path(a);
+      if (p === "/configurators" && text(a) === "Конфигураторы") configs.push(a);
+      else if (p === "/catalog" && text(a) === "Каталог") catalogs.push(a);
+      else if (p.indexOf("/configurators/") === 0 && groups.indexOf(a.parentNode) < 0) groups.push(a.parentNode);
+    });
+    var desktop = configs.length > 0;
+
+    // десктоп: «Статьи» сразу после «Конфигураторы»
+    var own = document.querySelectorAll("a[" + MARK + '="desktop"]');
+    for (var i = 0; i < own.length; i++) if (configs.indexOf(own[i].previousElementSibling) < 0) remove(own[i]);
     var onConfigurators = /^\/configurators(\/|$)/.test(location.pathname);
     configs.forEach(function (cfg) {
       var next = cfg.nextElementSibling;
-      var item = next && next.hasAttribute(MARK) ? next : null;
-      // оформление — как у соседнего пункта; на страницах конфигураторов «Конфигураторы» может быть
-      // выделен как активный, тогда берём оформление «Каталог» из того же меню
+      var item = next && next.getAttribute(MARK) === "desktop" ? next : null;
+      // на страницах конфигураторов «Конфигураторы» может быть выделен как активный — оформление берём у «Каталог»
       var source = cfg;
-      if (onConfigurators) {
-        for (var j = 0; j < catalogs.length; j++) if (catalogs[j].parentNode === cfg.parentNode) source = catalogs[j];
-      }
+      if (onConfigurators) for (var j = 0; j < catalogs.length; j++) if (catalogs[j].parentNode === cfg.parentNode) source = catalogs[j];
       if (!item) {
-        item = document.createElement("a");
-        item.setAttribute(MARK, "");
-        item.setAttribute("href", HREF);
-        item.textContent = "Статьи";
+        item = link(source.className);
+        item.setAttribute(MARK, "desktop");
         cfg.parentNode.insertBefore(item, cfg.nextSibling);
-      }
-      if (item.className !== source.className) item.className = source.className;
+      } else if (item.className !== source.className) item.className = source.className;
     });
-    if (configs.length) {
+
+    // мобильное меню: разделитель и группа «Статьи» после группы ссылок конфигураторов
+    var blocks = document.querySelectorAll("[" + MARK + '="mobile"]');
+    for (var k = 0; k < blocks.length; k++) {
+      var prevEl = blocks[k].previousElementSibling;
+      var anchor = prevEl && prevEl.getAttribute(MARK) === "mobile-sep" ? prevEl.previousElementSibling : null;
+      if (desktop || groups.indexOf(anchor) < 0) {
+        if (prevEl && prevEl.getAttribute(MARK) === "mobile-sep") remove(prevEl);
+        remove(blocks[k]);
+      }
+    }
+    if (!desktop) {
+      groups.forEach(function (group) {
+        var n1 = group.nextElementSibling;
+        if (n1 && n1.getAttribute(MARK) === "mobile-sep") return;
+        var sample = group.querySelector("a[href]");
+        // разделитель — как между рубриками каталога и конфигураторами (пустой элемент перед группой)
+        var before = group.previousElementSibling;
+        var sep = before && !before.children.length && !text(before) ? before.cloneNode(false) : document.createElement("div");
+        sep.setAttribute(MARK, "mobile-sep");
+        var box = group.cloneNode(false);
+        box.setAttribute(MARK, "mobile");
+        box.appendChild(link(sample ? sample.className : ""));
+        group.parentNode.insertBefore(box, group.nextSibling);
+        group.parentNode.insertBefore(sep, box);
+      });
+    }
+
+    if (configs.length || groups.length) {
       var pre = document.querySelectorAll("[data-unitr-prenav]");
-      for (var k = 0; k < pre.length; k++) pre[k].parentNode.removeChild(pre[k]);
+      for (var m = 0; m < pre.length; m++) remove(pre[m]);
     }
   }
 
