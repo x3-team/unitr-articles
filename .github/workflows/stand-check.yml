@@ -1,0 +1,35 @@
+# Проверка тестового стенда без выкладки: приёмка раздела по Прил. № 4 и пункт «Статьи» в меню SPA (браузер).
+name: Stand check (test.unitr.ru)
+
+on:
+  workflow_dispatch:
+    inputs:
+      inspect:
+        description: Вывести структуру шапки SPA (отладка)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      SITE_URL: ${{ vars.STAND_URL || 'https://test.unitr.ru' }}
+      BASIC_AUTH: ${{ secrets.STAND_AUTH }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm i --no-save --no-package-lock playwright@1.56.1 >/dev/null && npx playwright install --with-deps chromium >/dev/null
+      - name: Пункт «Статьи» в меню SPA
+        run: node scripts/check-spa-menu.mjs "$SITE_URL" --report=menu.md ${{ inputs.inspect && '--inspect' || '' }}
+      - name: Приёмка раздела (Прил. № 4)
+        if: always()
+        run: node scripts/check-acceptance.mjs "$SITE_URL" --mode=static --stand --report=acceptance.md
+        env:
+          SECRET_VALUES: ${{ secrets.WP_GRAPHQL_TOKEN }}
+      - if: always()
+        run: cat menu.md acceptance.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
