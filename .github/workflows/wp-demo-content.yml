@@ -1,10 +1,15 @@
-# Тестовые статьи в рубрике poleznye-stati на manage.unitr.ru — для приёмки раздела на стенде (test.unitr.ru).
-#   seed   — 12 опубликованных статей + 1 черновик (обложка, excerpt, H2/H3, SEO-поля, латинский ЧПУ);
-#            повторный запуск обновляет их, а не дублирует;
-#   status — сколько статей в рубрике и какие из них тестовые;
-#   remove — удалить только тестовые статьи (мета _unitr_demo, метка test-unitr-demo) и их обложки.
-# После seed/remove запускается выкладка раздела на стенд, чтобы он сразу показал изменения.
-# В лог (репозиторий публичный) выводятся только ярлыки тестовых статей и счётчики.
+# Операции с WordPress (manage.unitr.ru) для раздела «Статьи» — через WP-CLI по SSH. Боевой unitr.ru не затрагивается.
+#   seed / status / remove — тестовые статьи в poleznye-stati (12 опубликованных + черновик, метка test-unitr-demo);
+#   check         — самопроверка WordPress (только чтение): плагины, рубрика, поля статей, GraphQL;
+#   scenario      — ручные пункты Прил. № 4 на тестовых статьях: изменения в WordPress → выкладка на стенд →
+#                   проверка (scripts/check-scenario.mjs) → откат изменений → выкладка;
+#   post-show     — текст и поля записи post_id (для подготовки отрывка и SEO-полей);
+#   seo-fill      — отрывок и SEO-поля из deploy/hosting/seo-fill.json (только пустые поля);
+#   plugin-update — обновить плагин раздела из wp/unitr-articles (настройки сохраняются);
+#   dispatch-setup — пересборка стенда сразу после изменений в WordPress: репозиторий и токен из
+#                   secrets.WP_DISPATCH_TOKEN (fine-grained, Contents: Read and write на этот репозиторий).
+# После seed/remove/seo-fill запускается выкладка раздела на стенд. В лог (репозиторий публичный) выводятся
+# только счётчики, ярлыки статей и PASS/FAIL.
 name: WP test content (manage.unitr.ru)
 
 on:
@@ -12,10 +17,14 @@ on:
     inputs:
       action:
         type: choice
-        options: [seed, status, remove]
+        options: [status, check, seed, remove, scenario, post-show, seo-fill, plugin-update, dispatch-setup]
         default: status
+      post_id:
+        description: ID записи (для post-show)
+        type: string
+        default: ""
       allow_spa:
-        description: Загрузить, даже если боевой SPA упоминает рубрику poleznye-stati (только после согласования)
+        description: seed — загрузить, даже если боевой SPA упоминает рубрику poleznye-stati (только после согласования)
         type: boolean
         default: false
 
@@ -34,6 +43,9 @@ jobs:
       SSHPASS: ${{ secrets.HOSTING_SSH_PASSWORD }}
       SSH_HOST: ${{ secrets.HOSTING_SSH_HOST }}
       SSH_USER: ${{ secrets.HOSTING_SSH_USER }}
+      ACTION: ${{ inputs.action }}
+      GH_TOKEN: ${{ github.token }}
+      SITE_URL: ${{ vars.STAND_URL || 'https://test.unitr.ru' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -42,22 +54,97 @@ jobs:
           cache: npm
       - run: npm ci
       - run: sudo apt-get install -y -q lftp sshpass >/dev/null
-      - name: Статьи и обложки
+      - name: Файлы для хостинга
         run: |
           node --import tsx scripts/wp-demo-export.ts out-demo 12
-          cp deploy/hosting/wp-demo-content.php deploy/hosting/wp-demo-content.sh out-demo/
+          cp deploy/hosting/wp-demo-content.php deploy/hosting/wp-stand-scenario.php deploy/hosting/wp-demo-content.sh deploy/hosting/seo-fill.json out-demo/
+          (cd wp && zip -qr -X ../out-demo/unitr-articles-wp-plugin.zip unitr-articles)
       - name: Загрузка на хостинг
         run: |
           lftp -u "$SSH_USER,$SSHPASS" -e "set sftp:auto-confirm yes; set cmd:fail-exit yes; mkdir -p -f tmp; mirror -R --delete --no-perms out-demo tmp/unitr-demo; bye" "sftp://$SSH_HOST"
+          # функция для следующих шагов: команда на хостинге (каталог загружается заново — скрипт удаляет его в конце)
+          cat > "$RUNNER_TEMP/host.sh" <<'EOS'
+          host() {
+            lftp -u "$SSH_USER,$SSHPASS" -e "set sftp:auto-confirm yes; set cmd:fail-exit yes; mkdir -p -f tmp; mirror -R --delete --no-perms out-demo tmp/unitr-demo; bye" "sftp://$SSH_HOST" >/dev/null
+            sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" "$1 bash tmp/unitr-demo/wp-demo-content.sh"
+          }
+          # дождаться выкладки на стенд, запущенной после метки времени $1 (событием из WordPress или вручную)
+          wait_deploy() {
+            local since="$1" id=""
+            for _ in $(seq 1 90); do
+              id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-static.yml --limit 10 --json databaseId,createdAt,event \
+                --jq "[.[] | select(.createdAt > \"$since\" and .event != \"schedule\")] | last | .databaseId // empty")
+              [ -n "$id" ] && break
+              sleep 10
+            done
+            [ -n "$id" ] || { echo "выкладка не запустилась"; return 1; }
+            echo "выкладка: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$id"
+            gh run watch "$id" --repo "$GITHUB_REPOSITORY" --interval 15 >/dev/null 2>&1 || true
+          }
+          EOS
       - name: WP-CLI (${{ inputs.action }})
+        if: contains(fromJSON('["seed","status","remove"]'), inputs.action)
         env:
-          ACTION: ${{ inputs.action }}
           ALLOW_SPA: ${{ inputs.allow_spa && 'yes' || '' }}
         run: |
           sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
             "DEMO_MODE=$ACTION ALLOW_SPA=$ALLOW_SPA bash tmp/unitr-demo/wp-demo-content.sh"
-      - name: Обновить стенд
-        if: inputs.action != 'status'
+      - name: WP-CLI (${{ inputs.action }})
+        if: contains(fromJSON('["check","seo-fill","plugin-update"]'), inputs.action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          POST_ID: ${{ inputs.post_id }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
+            "DEMO_MODE=$ACTION DEMO_PHP=wp-stand-scenario.php bash tmp/unitr-demo/wp-demo-content.sh" | tee wp.log
+          ! grep -q '^FAIL' wp.log || [ "$ACTION" = check ]
+      - name: WP-CLI (post-show)
+        if: inputs.action == 'post-show'
+        env:
+          POST_ID: ${{ inputs.post_id }}
+        run: |
+          [[ "$POST_ID" =~ ^[0-9]+$ ]] || { echo "post_id — число"; exit 1; }
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
+            "DEMO_MODE=show POST_ID=$POST_ID DEMO_PHP=wp-stand-scenario.php bash tmp/unitr-demo/wp-demo-content.sh"
+      - name: Пересборка по событию из WordPress
+        if: inputs.action == 'dispatch-setup'
+        env:
+          WP_DISPATCH_TOKEN: ${{ secrets.WP_DISPATCH_TOKEN }}
+        run: |
+          [ -n "$WP_DISPATCH_TOKEN" ] || { echo "::error::Нет секрета WP_DISPATCH_TOKEN"; exit 1; }
+          printf '%s' "$WP_DISPATCH_TOKEN" | sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
+            "DEMO_MODE=dispatch DISPATCH_REPO=$GITHUB_REPOSITORY DEMO_PHP=wp-stand-scenario.php bash tmp/unitr-demo/wp-demo-content.sh" | tee wp.log
+          ! grep -q '^FAIL' wp.log
+      - name: Сценарий ручных пунктов Прил. № 4
+        if: inputs.action == 'scenario'
+        env:
+          BASIC_AUTH: ${{ secrets.STAND_AUTH }}
+        run: |
+          . "$RUNNER_TEMP/host.sh"
+          T0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
+            "DEMO_MODE=apply DEMO_PHP=wp-stand-scenario.php bash tmp/unitr-demo/wp-demo-content.sh" | tee apply.log
+          SCENARIO=$(sed -n 's/^SCENARIO //p' apply.log)
+          [ -n "$SCENARIO" ] || exit 1
+          # выкладку запускает событие из WordPress (если настроено); если за 2 минуты не запустилась — вручную
+          sleep 120
+          if ! gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-static.yml --limit 5 --json createdAt,event --jq ".[] | select(.createdAt > \"$T0\" and .event == \"repository_dispatch\")" | grep -q .; then
+            echo "событие из WordPress не пришло — выкладка вручную"
+            gh workflow run deploy-static.yml --repo "$GITHUB_REPOSITORY" -f target=test
+          else
+            echo "выкладку запустило событие из WordPress"
+          fi
+          wait_deploy "$T0"
+          RC=0
+          node scripts/check-scenario.mjs "$SITE_URL" "$SCENARIO" --report=scenario.md || RC=$?
+          echo "== Откат изменений"
+          host "DEMO_MODE=revert DEMO_PHP=wp-stand-scenario.php"
+          T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          sleep 5
+          gh workflow run deploy-static.yml --repo "$GITHUB_REPOSITORY" -f target=test
+          wait_deploy "$T1"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-static.yml --limit 1 --json conclusion,url --jq '"выкладка после отката: \(.[0].conclusion) \(.[0].url)"'
+          cat scenario.md >> "$GITHUB_STEP_SUMMARY"
+          exit $RC
+      - name: Обновить стенд
+        if: contains(fromJSON('["seed","remove","seo-fill"]'), inputs.action)
         run: gh workflow run deploy-static.yml --repo "$GITHUB_REPOSITORY" -f target=test

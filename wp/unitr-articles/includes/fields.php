@@ -55,7 +55,7 @@ add_action(
 						'name'         => UNITR_SEO_TITLE_KEY,
 						'type'         => 'text',
 						'maxlength'    => 120,
-						'instructions' => 'Заголовок страницы в поиске (тег title). Рекомендуется до 60–70 символов. Пусто — используется заголовок статьи.',
+						'instructions' => 'Для статей рубрики «' . UNITR_ARTICLES_CATEGORY_NAME . '» (раздел unitr.ru/articles/). Заголовок страницы в поиске (тег title), до 60–70 символов. Пусто — заголовок статьи.',
 						'show_in_graphql' => 1,
 					),
 					array(
@@ -69,15 +69,18 @@ add_action(
 						'show_in_graphql' => 1,
 					),
 				),
+				// у любой записи, а не только в рубрике раздела: у новой записи рубрика ещё не выбрана, а блочный редактор
+				// не перепроверяет условие «рубрика» при её выборе — блок не появлялся до сохранения записи
 				'location'           => array(
 					array(
 						array(
-							'param'    => 'post_category',
+							'param'    => 'post_type',
 							'operator' => '==',
-							'value'    => 'category:' . UNITR_ARTICLES_CATEGORY,
+							'value'    => 'post',
 						),
 					),
 				),
+				'menu_order'         => 0,
 				'position'           => 'side',
 				'style'              => 'default',
 				'active'             => true,

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Тестовые статьи в рубрике poleznye-stati на manage.unitr.ru (для приёмки на стенде; .github/workflows/wp-demo-content.yml).
 #   DEMO_MODE=seed|status|remove   DEMO_DIR=~/tmp/unitr-demo (articles.json, covers/, wp-demo-content.php)
+#   DEMO_PHP=wp-stand-scenario.php — самопроверка WordPress и сценарий ручных пунктов приёмки (DEMO_MODE=check|apply|revert|dispatch)
 #   ALLOW_SPA=yes — загрузить, даже если боевой SPA (www/unitr.ru) упоминает рубрику poleznye-stati
 # Статьи помечены мета-полем _unitr_demo и меткой test-unitr-demo; remove удаляет только их (вместе с обложками).
 set -euo pipefail
@@ -34,7 +35,15 @@ if [ "$DEMO_MODE" = seed ]; then
 fi
 
 echo "== WP-CLI: $(wp --version 2>&1 | head -1)"
-wp eval-file "$DEMO_DIR/wp-demo-content.php" 2>&1
+if [ "$DEMO_MODE" = plugin-update ]; then
+  # обновление плагина раздела: файлы заменяются, активность и настройки сохраняются
+  echo "до: $(wp plugin get unitr-articles --field=version 2>&1)"
+  wp plugin install "$DEMO_DIR/unitr-articles-wp-plugin.zip" --force 2>&1 | tail -2
+  echo "после: $(wp plugin get unitr-articles --field=version 2>&1), статус: $(wp plugin get unitr-articles --field=status 2>&1)"
+  rm -rf "$DEMO_DIR"
+  exit 0
+fi
+wp eval-file "$DEMO_DIR/${DEMO_PHP:-wp-demo-content.php}" 2>&1
 # ссылки и кеш объектов WordPress, если включён
 wp cache flush >/dev/null 2>&1 || true
 rm -rf "$DEMO_DIR"
