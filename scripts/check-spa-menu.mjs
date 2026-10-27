@@ -24,16 +24,19 @@ const AUTH = process.env.BASIC_AUTH ? { Authorization: `Basic ${Buffer.from(proc
 const results = [];
 const check = (name, ok, details = "") => results.push({ name, ok: !!ok, details: String(details) });
 
-// упрощённое дерево элемента: теги, классы, href и короткие тексты (без атрибутов данных и скриптов)
-function outline(el, depth = 0, max = 9) {
-  if (!el || depth > max) return "";
-  const cls = typeof el.className === "string" && el.className ? `.${el.className.trim().split(/\s+/).slice(0, 3).join(".")}` : "";
-  const href = el.getAttribute?.("href") ? ` href=${el.getAttribute("href")}` : "";
-  const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).join(" ").slice(0, 40);
-  const vis = el.getClientRects().length ? "" : " [скрыт]";
-  let s = `${"  ".repeat(depth)}<${el.tagName.toLowerCase()}${cls}${href}>${own ? ` «${own}»` : ""}${vis}\n`;
-  for (const c of el.children) if (!["SCRIPT", "STYLE", "svg", "SVG", "PATH"].includes(c.tagName)) s += outline(c, depth + 1, max);
-  return s;
+// упрощённое дерево элементов: теги, классы, href и короткие тексты (без атрибутов данных и скриптов); выполняется в браузере
+function dump({ selector, limit, max }) {
+  const outline = (el, depth) => {
+    if (!el || depth > max) return "";
+    const cls = typeof el.className === "string" && el.className ? `.${el.className.trim().split(/\s+/).slice(0, 3).join(".")}` : "";
+    const href = el.getAttribute("href") ? ` href=${el.getAttribute("href")}` : "";
+    const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).join(" ").slice(0, 40);
+    const vis = el.getClientRects().length ? "" : " [скрыт]";
+    let s = `${"  ".repeat(depth)}<${el.tagName.toLowerCase()}${cls}${href}>${own ? ` «${own}»` : ""}${vis}\n`;
+    for (const c of el.children) if (!["SCRIPT", "STYLE", "SVG", "svg", "PATH", "path"].includes(c.tagName)) s += outline(c, depth + 1);
+    return s;
+  };
+  return [...document.querySelectorAll(selector)].slice(0, limit).map((e) => outline(e, 0)).join("---\n");
 }
 
 // пункты меню в порядке документа: видимые ссылки/кнопки с текстом «Каталог», «Конфигураторы», «Статьи»
@@ -78,7 +81,7 @@ async function main() {
     const page = await desk.newPage();
     await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
     if (INSPECT) {
-      console.log("== Шапка главной (десктоп)\n" + (await page.evaluate(outline.toString() + `; const h = document.querySelector("header") || [...document.querySelectorAll("nav")][0]; outline(h)`)));
+      console.log("== Шапка главной (десктоп)\n" + (await page.evaluate(dump, { selector: "header, body > div > nav, #root > div > nav", limit: 2, max: 9 })));
     }
     const pages = await page.evaluate((base) => {
       const out = new Set();
@@ -123,7 +126,7 @@ async function main() {
     await mp.goto(`${BASE}/`, { waitUntil: "networkidle" });
     const opened = await openMobileMenu(mp);
     if (INSPECT) {
-      console.log(`== Мобильная шапка (меню открыто: ${opened})\n` + (await mp.evaluate(outline.toString() + `; [...document.querySelectorAll("header, nav, [class*=menu i]")].slice(0, 4).map((e) => outline(e, 0, 7)).join("\\n---\\n")`)));
+      console.log(`== Мобильная шапка (меню открыто: ${opened})\n` + (await mp.evaluate(dump, { selector: "header, nav, [class*=menu i], [role=dialog]", limit: 5, max: 7 })));
     }
     const mItems = (await menuState(mp)).map((i) => i.text);
     check("Мобильное меню главной: «Статьи» видна после открытия меню", opened && mItems.includes("Статьи") && mItems.lastIndexOf("Конфигураторы") < mItems.lastIndexOf("Статьи"), `меню открыто: ${opened}; ${mItems.join(" · ") || "пунктов не найдено"}`);
