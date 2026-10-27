@@ -25,7 +25,7 @@ if [ "$DEMO_MODE" = seed ]; then
   # тестовые статьи не должны появиться на боевом сайте: выводит ли текущий SPA рубрику из WordPress
   # (файл SPA упоминает рубрику и обращается к API WordPress)
   MENTIONS="$(grep -rlF poleznye "$H/www/unitr.ru" --include='*.js' --include='*.html' 2>/dev/null | grep -v '/articles/' || true)"
-  WP_API="$(printf '%s\n' "$MENTIONS" | grep . | xargs -r grep -lE 'graphql|wp-json|manage\.unitr\.ru' 2>/dev/null | wc -l)"
+  WP_API="$(printf '%s\n' "$MENTIONS" | grep . | xargs -r grep -lE 'graphql|wp-json|manage\.unitr\.ru' 2>/dev/null | wc -l || true)"
   echo "== Боевой SPA: файлов с упоминанием poleznye: $(printf '%s\n' "$MENTIONS" | grep -c . || true), из них с запросами к WordPress: $WP_API"
   if [ "$WP_API" != 0 ] && [ "${ALLOW_SPA:-}" != yes ]; then
     echo "Боевой SPA может выводить рубрику из WordPress — тестовые статьи не загружены (allow_spa=true — после согласования)"
