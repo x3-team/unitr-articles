@@ -29,13 +29,24 @@ function authHeader(): Record<string, string> {
 export class GraphQLError extends Error {}
 
 export async function wpQuery<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json", ...authHeader() },
-    body: JSON.stringify({ query, variables }),
-    // кешированием управляет слой content/index.ts (unstable_cache с TTL ≤ 15 мин и тегом для вебхука)
-    cache: "no-store",
-  });
+  // shared-хостинг WordPress иногда не отвечает или отвечает 5xx/429 — до 4 попыток с паузой
+  let res: Response | undefined;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      res = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", ...authHeader() },
+        body: JSON.stringify({ query, variables }),
+        // кешированием управляет слой content/index.ts (unstable_cache с TTL ≤ 15 мин и тегом для вебхука)
+        cache: "no-store",
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (res.ok || (res.status < 500 && res.status !== 429) || attempt >= 4) break;
+    } catch (e) {
+      if (attempt >= 4) throw e;
+    }
+    await new Promise((r) => setTimeout(r, 2000 * attempt));
+  }
   if (!res.ok) throw new GraphQLError(`WPGraphQL HTTP ${res.status}`);
   const json = (await res.json()) as { data?: T; errors?: { message: string }[] };
   if (json.errors?.length) throw new GraphQLError(json.errors.map((e) => e.message).join("; "));
