@@ -253,7 +253,7 @@ if ( function_exists( 'graphql' ) ) {
 	$out( false, 'GraphQL', 'функция graphql() недоступна' );
 }
 
-$res = WP_CLI::runcommand( 'unitr-articles check', array( 'return' => 'all', 'exit_error' => false, 'launch' => false ) );
+$res = WP_CLI::runcommand( 'unitr-articles check', array( 'return' => 'all', 'exit_error' => false, 'launch' => true ) );
 foreach ( explode( "\n", trim( (string) $res->stdout . "\n" . (string) $res->stderr ) ) as $line ) {
 	if ( '' !== trim( $line ) ) {
 		WP_CLI::log( '  wp unitr-articles check: ' . preg_replace( '/(github_pat_|ghp_)\w+/', '$1***', $line ) );
