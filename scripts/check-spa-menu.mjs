@@ -80,6 +80,7 @@ async function main() {
     const desk = await browser.newContext({ httpCredentials, viewport: { width: 1440, height: 900 } });
     const page = await desk.newPage();
     await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+    check("После запуска SPA запасная навигация из исходного HTML убрана", (await page.locator("[data-unitr-prenav]").count()) === 0);
     if (INSPECT) {
       console.log("== Шапка главной (десктоп)\n" + (await page.evaluate(dump, { selector: "header, body > div > nav, #root > div > nav", limit: 2, max: 9 })));
     }
@@ -115,7 +116,10 @@ async function main() {
     // 4. переход по ссылке «Статьи»
     await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
     const link = page.locator('a[href$="/articles/"]', { hasText: "Статьи" }).first();
-    const [resp] = await Promise.all([page.waitForNavigation({ waitUntil: "domcontentloaded" }).catch(() => null), link.click()]);
+    const [resp] = await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => null),
+      link.click({ timeout: 10_000 }).catch(() => null),
+    ]);
     const h1 = await page.locator("h1").first().textContent().catch(() => "");
     check("Клик по «Статьи» на главной → /articles/ (200, H1 «Статьи»)", new URL(page.url()).pathname === "/articles/" && resp?.status() === 200 && h1?.trim() === "Статьи", `${page.url()} HTTP ${resp?.status()} H1 «${h1?.trim()}»`);
     await desk.close();

@@ -105,11 +105,19 @@ jobs:
           DEPLOY_USER: ${{ secrets.HOSTING_SSH_USER }}
           DEPLOY_PASSWORD: ${{ secrets.HOSTING_SSH_PASSWORD }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          BUILD_ID: ${{ github.sha }}
       - name: Проверка критериев приёмки (Прил. № 4)
         if: github.event_name != 'schedule' && !inputs.dry_run
         run: node scripts/check-acceptance.mjs "$SITE_URL" --mode=static --report=acceptance.md ${{ matrix.target == 'test' && '--stand' || '' }}
         env:
           SECRET_VALUES: ${{ secrets.WP_GRAPHQL_TOKEN }}
           BASIC_AUTH: ${{ matrix.target == 'test' && secrets.STAND_AUTH || '' }}
+      - name: Пункт «Статьи» в меню SPA (браузер)
+        if: github.event_name != 'schedule' && !inputs.dry_run
+        run: |
+          npm i --no-save --no-package-lock playwright@1.56.1 >/dev/null && npx playwright install --with-deps chromium >/dev/null
+          node scripts/check-spa-menu.mjs "$SITE_URL" --report=menu.md
+        env:
+          BASIC_AUTH: ${{ matrix.target == 'test' && secrets.STAND_AUTH || '' }}
       - if: always() && github.event_name != 'schedule'
-        run: cat acceptance.md >> "$GITHUB_STEP_SUMMARY" || true
+        run: cat acceptance.md menu.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true

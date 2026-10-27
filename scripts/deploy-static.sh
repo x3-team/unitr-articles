@@ -8,9 +8,10 @@
 #   FTP_SSL_ALLOW=no          только для FTP без TLS (не рекомендуется)
 #   DRY_RUN=1                  показать, что будет загружено, ничего не меняя
 #
-# Что меняется на хостинге: каталог /articles/ (целиком принадлежит разделу), sitemap.xml, sitemaps/, robots.txt
-# и блок «# BEGIN unitr-articles … # END unitr-articles» в начале корневого .htaccess. Остальные файлы сайта
-# не трогаются. Перед первой выкладкой исходные .htaccess и robots.txt сохраняются как *.before-unitr-articles.
+# Что меняется на хостинге: каталог /articles/ (целиком принадлежит разделу), sitemap.xml, sitemaps/, robots.txt,
+# блок «# BEGIN unitr-articles … # END unitr-articles» в начале корневого .htaccess и (SPA_MENU=1, по умолчанию)
+# блоки «unitr-articles» в index.html SPA — пункт «Статьи» в шапке (scripts/merge-spa-index.mjs). Остальные файлы
+# сайта не трогаются. Перед первой выкладкой исходные .htaccess и robots.txt сохраняются как *.before-unitr-articles.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -68,5 +69,23 @@ elif [ -z "$DRY" ]; then
 else
   # содержимое .htaccess сайта в лог не выводится (лог публичный) — только объём изменений
   echo "   будет изменено строк: $(diff "$TMP/.htaccess" "$TMP/.htaccess.new" | grep -c '^[<>]'); правила сайта вне блока сохраняются"
+fi
+if [ "${SPA_MENU:-1}" = "1" ]; then
+  echo "== Пункт «Статьи» в шапке SPA (блоки unitr-articles в index.html)"
+  if lf "cd $DEPLOY_PATH; get -e -O $TMP index.html" >/dev/null 2>&1; then
+    node scripts/merge-spa-index.mjs "$TMP/index.html" "$TMP/index.html.new" "${BUILD_ID:-1}"
+    if cmp -s "$TMP/index.html" "$TMP/index.html.new"; then
+      echo "   без изменений"
+    elif [ -z "$DRY" ]; then
+      # копия index.html SPA без блоков раздела (после каждой новой сборки SPA — свежая)
+      grep -q "BEGIN unitr-articles" "$TMP/index.html" || lf "cd $DEPLOY_PATH; put $TMP/index.html -o index.html.before-unitr-articles"
+      lf "cd $DEPLOY_PATH; put $TMP/index.html.new -o index.html"
+      echo "   index.html обновлён"
+    else
+      echo "   будет изменено строк: $(diff "$TMP/index.html" "$TMP/index.html.new" | grep -c '^[<>]')"
+    fi
+  else
+    echo "   index.html сайта не найден — пропущено"
+  fi
 fi
 echo "Готово."
