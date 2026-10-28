@@ -460,10 +460,9 @@ a.pager__num:hover {
   padding-top: 56px;
   padding-bottom: 96px;
 }
-/* без блока «Может быть интересно» (в разделе одна статья) — колонка текста той же ширины, что в макете */
+/* без блока «Может быть интересно» (в разделе одна статья) — текст на всю ширину контейнера, без пустого поля справа */
 .post--single {
-  grid-template-columns: minmax(0, 936px);
-  justify-content: start;
+  grid-template-columns: minmax(0, 1fr);
 }
 .post__main {
   min-width: 0;
@@ -777,7 +776,7 @@ a.pager__num:hover {
     grid-template-columns: minmax(0, 1fr) 320px;
   }
   .post--single {
-    grid-template-columns: minmax(0, 936px);
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
