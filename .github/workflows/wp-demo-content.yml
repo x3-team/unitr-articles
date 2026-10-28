@@ -148,9 +148,10 @@ jobs:
             [ -n "$RUN" ] || RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-static.yml --event repository_dispatch --limit 5 --json databaseId,createdAt --jq "[.[] | select(.createdAt >= \"$T0\")] | last | .databaseId // empty")
             if [ -z "$PAGE" ] && curl -sf -m 20 "$PROD/articles/$SLUG/" | grep -q "\"dateModified\":\"$MOD"; then PAGE=$(( $(date +%s) - S0 )); fi
             if [ -z "$MAP" ]; then
-              for l in $(curl -sf -m 20 "$PROD/sitemap.xml" | grep -oE '<loc>[^<]+</loc>' | sed 's/<[^>]*>//g'); do
-                curl -sf -m 20 "$l" | tr -d '\n ' | grep -q "/articles/$SLUG/</loc><lastmod>$MOD" && MAP=$(( $(date +%s) - S0 ))
-              done
+              # sitemap.xml — список адресов или индекс (тогда — его части из /sitemaps/)
+              SM=$(curl -sf -m 20 "$PROD/sitemap.xml"); ALL=$SM
+              for l in $(echo "$SM" | grep -oE '<loc>[^<]+/sitemaps/[^<]+</loc>' | sed 's/<[^>]*>//g'); do ALL="$ALL$(curl -sf -m 20 "$l")"; done
+              echo "$ALL" | tr -d '\n ' | grep -q "/articles/$SLUG/</loc><lastmod>$MOD" && MAP=$(( $(date +%s) - S0 ))
             fi
             [ -n "$PAGE" ] && [ -n "$MAP" ] && break
             sleep 10
