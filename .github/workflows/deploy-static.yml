@@ -3,9 +3,9 @@
 #
 # Цели:
 #   test       — тестовый стенд (vars.STAND_URL / vars.STAND_DIR, Basic Auth из secrets.STAND_AUTH);
-#   production — боевой unitr.ru. Только после апрува заказчика: добавить "production" в vars.DEPLOY_TARGETS
-#                и/или запустить вручную с target=production.
-# По расписанию (каждые 10 минут) обновляются цели из vars.DEPLOY_TARGETS, например ["test"].
+#   production — боевой unitr.ru. Только после апрува заказчика (vars.PROD_APPROVED=yes); вручную — target=production.
+# По событию из WordPress (repository_dispatch) и по расписанию (каждые 10 минут) обновляются цели из
+# vars.DEPLOY_TARGETS (например ["test"]) и, при vars.PROD_APPROVED=yes, production.
 #
 # Секреты: WP_GRAPHQL_URL, WP_GRAPHQL_TOKEN (пароль приложения WP; только при сборке, на хостинг не попадает),
 # HOSTING_SSH_HOST, HOSTING_SSH_USER, HOSTING_SSH_PASSWORD.
@@ -45,8 +45,11 @@ jobs:
           EVENT: ${{ github.event_name }}
           INPUT: ${{ inputs.target }}
           CONFIGURED: ${{ vars.DEPLOY_TARGETS || '[]' }}
+          PROD_APPROVED: ${{ vars.PROD_APPROVED }}
         run: |
           if [ "$EVENT" = workflow_dispatch ]; then echo "list=[\"$INPUT\"]" >> "$GITHUB_OUTPUT"
+          # после апрува заказчика боевой сайт обновляется сам: по событию из WordPress и по расписанию
+          elif [ "$PROD_APPROVED" = yes ]; then echo "list=$(jq -c '. + ["production"] | unique' <<< "$CONFIGURED")" >> "$GITHUB_OUTPUT"
           else echo "list=$CONFIGURED" >> "$GITHUB_OUTPUT"; fi
 
   deploy:

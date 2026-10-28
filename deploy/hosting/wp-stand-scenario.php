@@ -11,6 +11,7 @@
  *              стенда печатаются строкой SCENARIO {json}. Прежние значения сохраняются в опции unitr_demo_scenario.
  *   revert   — вернуть всё как было до apply.
  *   dispatch — сохранить в настройках плагина репозиторий и токен GitHub (из stdin) для мгновенной пересборки.
+ *   frontend — адрес сайта (FRONTEND_URL, по умолчанию https://unitr.ru) в настройках раздела и в wp-config.php.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -91,6 +92,37 @@ if ( 'seo-fill' === $mode ) {
 		$missing = function_exists( 'unitr_articles_missing' ) ? unitr_articles_missing( $p->ID ) : array();
 		$out( ! $missing, "ID {$p->ID} " . urldecode( $p->post_name ), ( $done ? 'заполнено: ' . implode( ', ', $done ) . '; ' : 'без изменений; ' ) . ( $missing ? 'не хватает: ' . implode( ', ', $missing ) : 'всё заполнено' ) );
 	}
+	return;
+}
+
+if ( 'frontend' === $mode ) {
+	// адрес сайта в настройках раздела (и в wp-config.php, если там задана константа UNITR_FRONTEND_URL)
+	$url = untrailingslashit( getenv( 'FRONTEND_URL' ) ?: 'https://unitr.ru' );
+	if ( defined( 'UNITR_FRONTEND_URL' ) ) {
+		$cfg = file_exists( ABSPATH . 'wp-config.php' ) ? ABSPATH . 'wp-config.php' : dirname( ABSPATH ) . '/wp-config.php';
+		$src = (string) file_get_contents( $cfg );
+		$new = preg_replace( '/(define\(\s*[\'"]UNITR_FRONTEND_URL[\'"]\s*,\s*)([\'"])[^\'"]*\2/', '${1}${2}' . $url . '${2}', $src, 1, $n );
+		if ( 1 !== $n ) {
+			WP_CLI::error( 'UNITR_FRONTEND_URL задана не строкой в wp-config.php — поправить вручную' );
+		}
+		// копия — вне каталога сайта (в ней пароль БД)
+		$bak_dir = ( getenv( 'HOME' ) ?: dirname( ABSPATH, 2 ) ) . '/backups';
+		wp_mkdir_p( $bak_dir );
+		$bak = $bak_dir . '/wp-config-' . gmdate( 'Ymd-His' ) . '.php';
+		if ( $new !== $src ) {
+			copy( $cfg, $bak ) && file_put_contents( $cfg, $new );
+		}
+		$out( false !== strpos( (string) file_get_contents( $cfg ), $url ), "UNITR_FRONTEND_URL в wp-config.php: $url", $new !== $src ? 'прежний wp-config.php — ~/backups/' . basename( $bak ) : 'уже было' );
+	}
+	$o                 = (array) get_option( $opt, array() );
+	$o['frontend_url'] = $url;
+	update_option( $opt, $o );
+	$o = (array) get_option( $opt, array() );
+	$out( ( $o['frontend_url'] ?? '' ) === $url, "Адрес сайта в настройках раздела: $url" );
+	$out( true, 'Ссылки «Просмотреть» ведут на сайт', empty( $o['rewrite_links'] ) ? 'выключено — ссылки на WordPress' : "включено — $url/articles/<адрес>/" );
+	$github = function_exists( 'unitr_articles_github_repo' ) && unitr_articles_github_repo() && unitr_articles_github_token();
+	$out( $github, 'Обновление сайта при изменениях — GitHub Actions', $github ? unitr_articles_github_repo() : 'не настроено: нужен секрет WP_DISPATCH_TOKEN и action=dispatch-setup' );
+	$out( true, 'Секрет вебхука /api/revalidate/', function_exists( 'unitr_articles_secret' ) && unitr_articles_secret() ? 'задан' : 'не задан (сайт статический, без Node.js — не используется)' );
 	return;
 }
 

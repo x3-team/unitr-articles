@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { ArchiveView } from "@/components/ArchiveView";
 import { ARTICLES_CATEGORY } from "@/lib/config";
 import { getArchivePage, getRubrics } from "@/lib/content";
-import { pageMetadata } from "@/lib/meta";
+import { archiveImage, pageMetadata } from "@/lib/meta";
 import { rubricPath } from "@/lib/paths";
 import { ARTICLES_CRUMB, HOME_CRUMB } from "@/lib/seo";
 import { ARCHIVE_LEAD } from "@/lib/archive-copy";
@@ -32,10 +32,12 @@ export async function generateMetadata({ params }: { params: Params }) {
   const r = await findRubric(p.rubric);
   const page = parsePage(p.page);
   if (!r) return {};
+  const data = Number.isNaN(page) ? null : await getArchivePage(page, r.slug);
   return pageMetadata({
     title: `${r.name} — статьи, страница ${page} | Юнит-Ресурс`,
     description: `Статьи рубрики «${r.name}». Страница ${page}.`,
     path: rubricPath(r.slug, page),
+    image: archiveImage(data?.items),
   });
 }
 

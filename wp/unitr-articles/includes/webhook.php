@@ -57,6 +57,22 @@ function unitr_articles_send_revalidate( $blocking = false ) {
 }
 
 /**
+ * Куда уходит событие об изменении статей (для страницы проверки): пусто — мгновенное обновление не настроено.
+ *
+ * @return string[]
+ */
+function unitr_articles_update_targets() {
+	$targets = array();
+	if ( unitr_articles_github_repo() && unitr_articles_github_token() ) {
+		$targets[] = 'GitHub Actions: https://api.github.com/repos/' . unitr_articles_github_repo() . '/dispatches (событие wp-content-changed → пересборка и выкладка раздела)';
+	}
+	if ( unitr_articles_frontend_url() && unitr_articles_secret() ) {
+		$targets[] = 'Сервер сайта (Node.js): ' . unitr_articles_frontend_url() . '/api/revalidate/';
+	}
+	return $targets;
+}
+
+/**
  * @return array|WP_Error ответ GitHub API (204 — пересборка запущена)
  */
 function unitr_articles_send_github_dispatch( $reasons, $blocking = false ) {

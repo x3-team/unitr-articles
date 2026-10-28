@@ -107,11 +107,14 @@ function unitr_articles_run_checks() {
 	$front  = unitr_articles_frontend_url();
 	$secret = unitr_articles_secret();
 	$add( $front ? 'ok' : 'error', 'Адрес сайта', $front ? $front : 'Не задан (Настройки → Раздел «Статьи» или UNITR_FRONTEND_URL)' );
-	$github = unitr_articles_github_repo() && unitr_articles_github_token();
-	if ( $github ) {
-		$add( 'ok', 'Пересборка в GitHub Actions', 'Статический вариант: при изменениях запускается пересборка ' . unitr_articles_github_repo() . ' (без неё — по расписанию каждые 10 минут)' );
-	}
-	$add( $secret || $github ? 'ok' : 'warn', 'Секрет вебхука', $secret ? 'Задан' : ( $github ? 'Не нужен (статический вариант)' : 'Не задан — сайт обновится только по истечении кеша (≤ 15 минут)' ) );
+	$github  = unitr_articles_github_repo() && unitr_articles_github_token();
+	$targets = unitr_articles_update_targets();
+	$add(
+		$targets ? 'ok' : 'warn',
+		'Куда уходит событие об изменении',
+		$targets ? implode( "\n", $targets ) : 'Мгновенное обновление не настроено: сайт обновится по расписанию сборки. Статический вариант — репозиторий и токен GitHub в настройках раздела'
+	);
+	$add( $secret || $github ? 'ok' : 'warn', 'Секрет вебхука', $secret ? 'Задан' : ( $github ? 'Не нужен: сайт статический (без Node.js), обновление — через GitHub Actions' : 'Не задан' ) );
 	$add( function_exists( 'wp_remote_post' ) ? 'ok' : 'error', 'Отправка вебхука', 'Срабатывает при публикации, изменении, снятии с публикации, удалении статей и изменении рубрик' );
 	return $r;
 }
@@ -150,11 +153,17 @@ function unitr_articles_render_check() {
 			<?php endforeach; ?>
 			</tbody>
 		</table>
-		<h2>Вебхук ревалидации</h2>
+		<h2>Обновление сайта при изменениях</h2>
 		<form method="post">
 			<?php wp_nonce_field( 'unitr_test_webhook' ); ?>
-			<p>Отправить тестовый запрос на <code><?php echo esc_html( unitr_articles_frontend_url() . '/api/revalidate/' ); ?></code> — сайт сбросит кеш раздела и карты сайта.</p>
-			<?php submit_button( 'Отправить тестовый вебхук', 'secondary', 'unitr_test_webhook', false ); ?>
+			<?php $unitr_targets = unitr_articles_update_targets(); ?>
+			<?php if ( $unitr_targets ) : ?>
+				<p>Отправить тестовое событие — раздел и карта сайта обновятся:</p>
+				<ul><?php foreach ( $unitr_targets as $unitr_target ) : ?><li><code><?php echo esc_html( $unitr_target ); ?></code></li><?php endforeach; ?></ul>
+			<?php else : ?>
+				<p>Мгновенное обновление не настроено (Настройки → Раздел «Статьи»).</p>
+			<?php endif; ?>
+			<?php submit_button( 'Отправить тестовое событие', 'secondary', 'unitr_test_webhook', false ); ?>
 		</form>
 		<?php if ( $webhook_result ) : ?>
 			<p><?php echo esc_html( $icons[ $webhook_result[0] ] . ' ' . $webhook_result[1] ); ?></p>

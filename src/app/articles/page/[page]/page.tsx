@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { ArchiveView } from "@/components/ArchiveView";
 import { getArchivePage, getRubrics } from "@/lib/content";
-import { pageMetadata } from "@/lib/meta";
+import { archiveImage, pageMetadata } from "@/lib/meta";
 import { archivePath } from "@/lib/paths";
 import { ARTICLES_CRUMB, HOME_CRUMB } from "@/lib/seo";
 import { ARCHIVE_DESCRIPTION, ARCHIVE_LEAD } from "@/lib/archive-copy";
@@ -24,10 +24,12 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: { params: Params }) {
   const page = parsePage((await params).page);
+  const data = Number.isNaN(page) ? null : await getArchivePage(page);
   return pageMetadata({
     title: `Статьи — страница ${page} | Юнит-Ресурс`,
     description: `${ARCHIVE_DESCRIPTION} Страница ${page}.`,
     path: archivePath(page),
+    image: archiveImage(data?.items),
   });
 }
 

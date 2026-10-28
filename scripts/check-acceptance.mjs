@@ -200,6 +200,9 @@ async function main() {
     const r = await get(articleUrls[0]);
     const art = jsonLds(r.body).find((x) => x["@type"] === "Article") || {};
     check("Пример Article (первая статья)", true, `headline: ${art.headline}; datePublished: ${art.datePublished}; dateModified: ${art.dateModified}; author: ${art.author?.name}; image: ${art.image?.url}; og:image: ${metaContent(r.body, "og:image")}`);
+    check("Автор в Schema.org — не служебная учётная запись WordPress", art.author?.name && !/admin|root/i.test(art.author.name), `${art.author?.["@type"]}: ${art.author?.name}`);
+    const og = metaContent((await get("/articles/")).body, "og:image") || "";
+    check("og:image архива — обложка первой статьи (если есть), а не заглушка", art.image?.url ? !/og-default/.test(og) : !!og, og);
   }
 
   // ===== 2. Меню =====
@@ -307,6 +310,8 @@ async function main() {
     }
     const ns = await get("/articles");
     check("/articles (без слеша) → 301 /articles/", ns.status === 301 && abs(ns.location || "") === `${BASE}/articles/`, `HTTP ${ns.status} → ${ns.location}`);
+    const up = await get("/ARTICLES/");
+    check("/ARTICLES/ (другой регистр) → 301 /articles/", up.status === 301 && abs(up.location || "") === `${BASE}/articles/`, `HTTP ${up.status} → ${up.location}`);
     const p1 = await get("/articles/page/1/");
     check("/articles/page/1/ → 301 /articles/ (нет дубля)", p1.status === 301 && abs(p1.location || "") === `${BASE}/articles/`, `HTTP ${p1.status} → ${p1.location}`);
   } else {

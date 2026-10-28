@@ -21,7 +21,8 @@ export interface ArticleSummary {
 export interface Article extends ArticleSummary {
   /** Полный текст статьи, HTML из WordPress (подзаголовки H2/H3) */
   contentHtml: string;
-  author: { name: string };
+  /** organization — автор не указан или это служебная учётная запись WordPress: подписывается компания */
+  author: { name: string; organization?: boolean };
   /** SEO-поля, заполняемые Заказчиком в WordPress. Пустые — подставляются заголовок/excerpt. */
   seo: { title: string; description: string };
   categories: { slug: string; name: string }[];

@@ -1,5 +1,5 @@
 import "server-only";
-import { ARTICLES_CATEGORY } from "../config";
+import { ARTICLES_CATEGORY, SITE_NAME } from "../config";
 import type { Article, ContentSource, Rubric, SitePage } from "./types";
 import { decodeEntities, demoteH1, stripTags } from "./wp-text";
 
@@ -105,6 +105,16 @@ interface WpPost {
 
 const gmt = (s: string) => new Date(s.endsWith("Z") ? s : `${s}Z`).toISOString();
 
+/**
+ * Автор статьи. Служебные учётные записи WordPress (MainAdmin, admin, editor… — латиница без пробела
+ * или со словом admin) не показываются: автором подписывается компания.
+ */
+export function authorOf(name: string | undefined | null): Article["author"] {
+  const n = (name || "").trim();
+  if (!n || /admin|root|wordpress/i.test(n) || /^[\w.@-]+$/.test(n)) return { name: SITE_NAME, organization: true };
+  return { name: n };
+}
+
 export function mapPost(p: WpPost): Article {
   const img = p.featuredImage?.node;
   return {
@@ -123,7 +133,7 @@ export function mapPost(p: WpPost): Article {
         }
       : null,
     contentHtml: demoteH1(p.content || ""),
-    author: { name: p.author?.node?.name || "Юнит-Ресурс" },
+    author: authorOf(p.author?.node?.name),
     seo: { title: p.unitrSeo?.title || "", description: p.unitrSeo?.description || "" },
     categories: p.categories?.nodes || [],
   };

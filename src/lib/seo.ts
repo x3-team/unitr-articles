@@ -42,7 +42,9 @@ export function articleLd(a: Article, description: string) {
     description,
     datePublished: a.date,
     dateModified: a.modified,
-    author: { "@type": "Person", name: a.author.name },
+    author: a.author.organization
+      ? { "@type": "Organization", name: a.author.name, url: absoluteUrl("/") }
+      : { "@type": "Person", name: a.author.name },
     publisher: publisher(),
     ...(a.cover
       ? { image: { "@type": "ImageObject", url: a.cover.url, width: a.cover.width, height: a.cover.height } }
