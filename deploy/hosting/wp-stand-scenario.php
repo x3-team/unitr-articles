@@ -95,6 +95,29 @@ if ( 'seo-fill' === $mode ) {
 	return;
 }
 
+if ( 'touch' === $mode ) {
+	// замер автообновления: пересохранить опубликованную статью без изменения текста (меняется только дата изменения);
+	// плагин отправляет событие в GitHub, как при правке статьи в админке
+	$p = get_post( (int) getenv( 'POST_ID' ) );
+	if ( ! $p || 'publish' !== $p->post_status ) {
+		WP_CLI::error( 'Нет опубликованной записи ' . getenv( 'POST_ID' ) );
+	}
+	sleep( 1 );
+	$r = wp_update_post( array( 'ID' => $p->ID ), true );
+	if ( is_wp_error( $r ) ) {
+		WP_CLI::error( $r->get_error_message() );
+	}
+	clean_post_cache( $p->ID );
+	$p = get_post( $p->ID );
+	// событие уходит на shutdown — отправить сразу и дождаться ответа GitHub
+	$res  = function_exists( 'unitr_articles_send_revalidate' ) ? unitr_articles_send_revalidate( true ) : null;
+	remove_action( 'shutdown', 'unitr_articles_send_revalidate' );
+	$code = is_wp_error( $res ) || ! $res ? 0 : (int) wp_remote_retrieve_response_code( $res );
+	$out( 204 === $code, 'Событие из WordPress принято GitHub', 'HTTP ' . $code );
+	WP_CLI::log( 'TOUCH ' . wp_json_encode( array( 'slug' => urldecode( $p->post_name ), 'modified' => gmdate( 'Y-m-d\TH:i:s', strtotime( $p->post_modified_gmt ) ) ) ) );
+	return;
+}
+
 if ( 'frontend' === $mode ) {
 	// адрес сайта в настройках раздела (и в wp-config.php, если там задана константа UNITR_FRONTEND_URL)
 	$url = untrailingslashit( getenv( 'FRONTEND_URL' ) ?: 'https://unitr.ru' );

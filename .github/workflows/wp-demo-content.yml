@@ -7,6 +7,8 @@
 #   post-show     — текст и поля записи post_id (для подготовки отрывка и SEO-полей);
 #   seo-fill      — отрывок и SEO-поля из deploy/hosting/seo-fill.json (только пустые поля);
 #   plugin-update — обновить плагин раздела из wp/unitr-articles (настройки сохраняются);
+#   measure       — замер автообновления: статья post_id пересохраняется в WordPress (текст не меняется), событие
+#                   уходит в GitHub; время до новой даты изменения на боевом unitr.ru и в sitemap.xml;
 #   frontend      — адрес сайта в плагине: https://unitr.ru (настройки раздела и UNITR_FRONTEND_URL в wp-config.php);
 #   dispatch-setup — пересборка стенда сразу после изменений в WordPress: репозиторий и токен из
 #                   secrets.WP_DISPATCH_TOKEN (fine-grained, Contents: Read and write на этот репозиторий);
@@ -20,7 +22,7 @@ on:
     inputs:
       action:
         type: choice
-        options: [status, check, backup, seed, remove, scenario, post-show, seo-fill, plugin-update, frontend, dispatch-setup]
+        options: [status, check, backup, seed, remove, scenario, post-show, seo-fill, plugin-update, frontend, dispatch-setup, measure]
         default: status
       post_id:
         description: ID записи (для post-show)
@@ -128,6 +130,36 @@ jobs:
           printf '%s' "$WP_DISPATCH_TOKEN" | sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
             "DEMO_MODE=dispatch DISPATCH_REPO=$GITHUB_REPOSITORY DEMO_PHP=wp-stand-scenario.php bash tmp/unitr-demo/wp-demo-content.sh" | tee wp.log
           ! grep -q '^FAIL' wp.log
+      - name: Замер автообновления (WordPress → unitr.ru)
+        if: inputs.action == 'measure'
+        env:
+          POST_ID: ${{ inputs.post_id || '147' }}
+          PROD: ${{ vars.PROD_SITE_URL || 'https://unitr.ru' }}
+        run: |
+          [[ "$POST_ID" =~ ^[0-9]+$ ]] || { echo "post_id — число"; exit 1; }
+          T0=$(date -u +%Y-%m-%dT%H:%M:%SZ); S0=$(date +%s)
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
+            "DEMO_MODE=touch POST_ID=$POST_ID DEMO_PHP=wp-stand-scenario.php bash tmp/unitr-demo/wp-demo-content.sh" | tee touch.log
+          grep -q '^PASS' touch.log || exit 1
+          SLUG=$(sed -n 's/^TOUCH //p' touch.log | jq -r .slug); MOD=$(sed -n 's/^TOUCH //p' touch.log | jq -r .modified)
+          echo "статья $SLUG, новая дата изменения $MOD (UTC)"
+          RUN=""; PAGE=""; MAP=""
+          for i in $(seq 1 120); do
+            [ -n "$RUN" ] || RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-static.yml --event repository_dispatch --limit 5 --json databaseId,createdAt --jq "[.[] | select(.createdAt >= \"$T0\")] | last | .databaseId // empty")
+            if [ -z "$PAGE" ] && curl -sf -m 20 "$PROD/articles/$SLUG/" | grep -q "\"dateModified\":\"$MOD"; then PAGE=$(( $(date +%s) - S0 )); fi
+            if [ -z "$MAP" ]; then
+              for l in $(curl -sf -m 20 "$PROD/sitemap.xml" | grep -oE '<loc>[^<]+</loc>' | sed 's/<[^>]*>//g'); do
+                curl -sf -m 20 "$l" | tr -d '\n ' | grep -q "/articles/$SLUG/</loc><lastmod>$MOD" && MAP=$(( $(date +%s) - S0 ))
+              done
+            fi
+            [ -n "$PAGE" ] && [ -n "$MAP" ] && break
+            sleep 10
+          done
+          echo "выкладка по событию: ${RUN:+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$RUN}"
+          fmt() { [ -n "$1" ] && printf '%d мин %02d с' $(( $1 / 60 )) $(( $1 % 60 )) || echo "не дождались за 20 мин"; }
+          echo "Страница статьи на $PROD: $(fmt "$PAGE")"
+          echo "sitemap.xml на $PROD: $(fmt "$MAP")"
+          [ -n "$PAGE" ] && [ -n "$MAP" ] && [ "$PAGE" -le 900 ] && [ "$MAP" -le 900 ] && echo "PASS ≤ 15 минут" || { echo "FAIL"; exit 1; }
       - name: Сценарий ручных пунктов Прил. № 4
         if: inputs.action == 'scenario'
         env:
