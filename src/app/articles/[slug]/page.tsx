@@ -82,7 +82,7 @@ export default async function ArticlePage({ params }: { params: Params }) {
             </p>
           </div>
         </header>
-        <div className="container post">
+        <div className={`container post${related.length ? "" : " post--single"}`}>
           <div className="post__main">
             {a.cover && (
               <figure className="post__cover">
@@ -110,6 +110,7 @@ export default async function ArticlePage({ params }: { params: Params }) {
               )}
             </nav>
           </div>
+          {related.length > 0 && (
           <aside className="post__aside" aria-label="Может быть интересно">
             <p className="aside__title">Может быть интересно</p>
             <ul>
@@ -124,6 +125,7 @@ export default async function ArticlePage({ params }: { params: Params }) {
               ))}
             </ul>
           </aside>
+          )}
         </div>
       </article>
     </Shell>

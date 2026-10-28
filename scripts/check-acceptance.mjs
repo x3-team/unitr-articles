@@ -186,6 +186,8 @@ async function main() {
     for (const og of ["og:title", "og:description", "og:image", "og:url", "og:type"]) if (!metaContent(r.body, og)) problems.push(og);
     if (metaContent(r.body, "og:type") !== "article") problems.push("og:type≠article");
     if (!/<div class="prose">[\s\S]*<h2>/.test(r.body)) problems.push("H2 в тексте");
+    // стили, вставленные в текст статьи в WordPress, не должны попадать на страницу (ломают вёрстку сайта)
+    if (/<style\b/i.test(/<div class="prose">([\s\S]*?)class="post-nav"/.exec(r.body)?.[1] || "")) problems.push("<style> в тексте статьи");
     const textLen = ((/<div class="prose">([\s\S]*?)<\/div>/.exec(r.body) || [, ""])[1] || "").replace(/<[^>]+>/g, "").length;
     if (textLen < 300) problems.push(`полный текст (${textLen} симв.)`);
     if (!/class="post-nav"/.test(r.body)) problems.push("навигация пред./след.");
