@@ -1,4 +1,5 @@
 # Операции с WordPress (manage.unitr.ru) для раздела «Статьи» — через WP-CLI по SSH. Боевой unitr.ru не затрагивается.
+#   backup        — резервная копия www/unitr.ru, БД и файлов WordPress в ~/backups/<метка> (deploy/hosting/backup.sh);
 #   seed / status / remove — тестовые статьи в poleznye-stati (12 опубликованных + черновик, метка test-unitr-demo);
 #   check         — самопроверка WordPress (только чтение): плагины, рубрика, поля статей, GraphQL;
 #   scenario      — ручные пункты Прил. № 4 на тестовых статьях: изменения в WordPress → выкладка на стенд →
@@ -17,7 +18,7 @@ on:
     inputs:
       action:
         type: choice
-        options: [status, check, seed, remove, scenario, post-show, seo-fill, plugin-update, dispatch-setup]
+        options: [status, check, backup, seed, remove, scenario, post-show, seo-fill, plugin-update, dispatch-setup]
         default: status
       post_id:
         description: ID записи (для post-show)
@@ -57,7 +58,7 @@ jobs:
       - name: Файлы для хостинга
         run: |
           node --import tsx scripts/wp-demo-export.ts out-demo 12
-          cp deploy/hosting/wp-demo-content.php deploy/hosting/wp-stand-scenario.php deploy/hosting/wp-demo-content.sh deploy/hosting/seo-fill.json out-demo/
+          cp deploy/hosting/wp-demo-content.php deploy/hosting/wp-stand-scenario.php deploy/hosting/wp-demo-content.sh deploy/hosting/seo-fill.json deploy/hosting/backup.sh out-demo/
           (cd wp && zip -qr -X ../out-demo/unitr-articles-wp-plugin.zip unitr-articles)
       - name: Загрузка на хостинг
         run: |
@@ -97,6 +98,11 @@ jobs:
           sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
             "DEMO_MODE=$ACTION DEMO_PHP=wp-stand-scenario.php bash tmp/unitr-demo/wp-demo-content.sh" | tee wp.log
           ! grep -q '^FAIL' wp.log || [ "$ACTION" = check ]
+      - name: Резервная копия
+        if: inputs.action == 'backup'
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
+            "bash tmp/unitr-demo/backup.sh; rc=\$?; rm -rf tmp/unitr-demo; exit \$rc"
       - name: WP-CLI (post-show)
         if: inputs.action == 'post-show'
         env:

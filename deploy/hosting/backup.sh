@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Резервная копия перед любыми изменениями (task=backup в .github/workflows/ops.yml):
+# Резервная копия перед любыми изменениями (action=backup в .github/workflows/wp-demo-content.yml):
 #   ~/backups/<метка>/unitr.ru-www.tar.gz        — весь каталог www/unitr.ru (SPA, .htaccess, robots.txt)
 #   ~/backups/<метка>/manage-db.sql.gz           — дамп БД WordPress manage.unitr.ru
 #   ~/backups/<метка>/manage-files.tar.gz        — файлы WordPress без wp-content/uploads
