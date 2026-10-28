@@ -42,7 +42,7 @@ jobs:
   # только чтение публичных адресов боевого сайта перед выкаткой
   prod-preflight:
     if: inputs.prod_preflight
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Боевой unitr.ru (публичные адреса)
         run: |
@@ -51,6 +51,40 @@ jobs:
           for p in / /articles/ /blog/ /blog/x/ /poleznye-stati/ /poleznye-stati/x /sitemap.xml /catalog; do
             echo "== $p"; curl -sS -m 20 -o /dev/null -D - "$B$p" | grep -iE '^(HTTP|location|content-type|x-robots-tag|cache-control)'
           done
-          echo "== <head> главной (без скриптов)"; curl -sS -m 20 "$B/" | sed -n '/<head/,/<\/head>/p' | grep -viE '^\s*<script' | head -40
-          echo "== body главной"; curl -sS -m 20 "$B/" | sed -n '/<body/,/<\/body>/p' | head -20
           echo "== sitemap.xml"; curl -sS -m 20 "$B/sitemap.xml" | head -c 1500; echo
+      - name: Условия заказчика на unitr.ru и стенд (после выкладки)
+        run: |
+          B=https://unitr.ru; S=https://test.unitr.ru; FAIL=0
+          ok() { if eval "$2"; then echo "PASS  $1"; else echo "FAIL  $1"; FAIL=1; fi; }
+          hdr() { curl -sS -m 20 -o /dev/null -D - "$1" | tr -d '\r'; }
+          A=$(curl -sS -m 20 "$B/articles/"); SLUG=$(echo "$A" | grep -oE 'href="/articles/[a-z0-9-]+/"' | grep -v '/page/\|/category/' | head -1 | sed 's/href="\/articles\///; s/\/"//')
+          echo "статья: $SLUG"
+          P=$(curl -sS -m 20 "$B/articles/$SLUG/")
+          ok "1. /articles/ → 200 с H1 «Статьи» и анонсом" '[ "$(curl -sS -m 20 -o /dev/null -w %{http_code} $B/articles/)" = 200 ] && echo "$A" | grep -q "<h1[^>]*>Статьи</h1>" && [ -n "$SLUG" ]'
+          ok "1. статья /articles/$SLUG/ → 200 с H2" '[ "$(curl -sS -m 20 -o /dev/null -w %{http_code} $B/articles/$SLUG/)" = 200 ] && echo "$P" | grep -q "<h2"'
+          ok "2. нет X-Robots-Tag на /articles/ и статье" '! hdr $B/articles/ | grep -qi "^x-robots-tag" && ! hdr $B/articles/$SLUG/ | grep -qi "^x-robots-tag"'
+          ok "2. нет meta noindex" '! echo "$A$P" | grep -qiE "<meta[^>]+name=\"robots\"[^>]+noindex"'
+          ok "2. canonical архива https://unitr.ru/articles/" 'echo "$A" | grep -q "rel=\"canonical\" href=\"https://unitr.ru/articles/\""'
+          ok "2. canonical статьи https://unitr.ru/articles/$SLUG/" 'echo "$P" | grep -q "rel=\"canonical\" href=\"https://unitr.ru/articles/$SLUG/\""'
+          for u in /blog /blog/ /poleznye-stati /poleznye-stati/; do
+            ok "3. $u → 301 https://unitr.ru/articles/" 'h=$(hdr $B$u); echo "$h" | grep -q "^HTTP/[0-9.]* 301" && echo "$h" | grep -qiE "^location: (https://unitr.ru)?/articles/$"'
+          done
+          for u in /blog/$SLUG/ /poleznye-stati/$SLUG; do
+            ok "3. $u → 301 /articles/$SLUG/" 'h=$(hdr $B$u); echo "$h" | grep -q "^HTTP/[0-9.]* 301" && echo "$h" | grep -qiE "^location: (https://unitr.ru)?/articles/$SLUG/$"'
+          done
+          SM=$(curl -sS -m 20 "$B/sitemap.xml"); ALL=$SM
+          for l in $(echo "$SM" | grep -oE '<loc>[^<]+</loc>' | sed 's/<[^>]*>//g'); do ALL="$ALL$(curl -sS -m 20 "$l")"; done
+          ok "3. sitemap.xml: главная, каталог, /articles/ и статья" 'echo "$ALL" | grep -q "<loc>https://unitr.ru/</loc>" && echo "$ALL" | grep -q "<loc>https://unitr.ru/catalog" && echo "$ALL" | grep -q "<loc>https://unitr.ru/articles/</loc>" && echo "$ALL" | grep -q "/articles/$SLUG/"'
+          ok "3. в sitemap нет /blog и /poleznye-stati" '! echo "$ALL" | grep -qE "unitr.ru/(blog|poleznye-stati)"'
+          R=$(curl -sS -m 20 "$B/robots.txt")
+          ok "robots.txt: Allow /articles/, Sitemap, группа Yandex сохранена" 'echo "$R" | grep -q "^Allow: /articles/" && echo "$R" | grep -q "^Sitemap: https://unitr.ru/sitemap.xml" && echo "$R" | grep -q "^User-agent: Yandex"'
+          ok "главная SPA → 200, ссылка «Статьи» в HTML" '[ "$(curl -sS -m 20 -o /dev/null -w %{http_code} $B/)" = 200 ] && curl -sS -m 20 $B/ | grep -q "href=\"/articles/\""'
+          ok "/catalog → 200 (SPA не задета)" '[ "$(curl -sS -m 20 -o /dev/null -w %{http_code} $B/catalog)" = 200 ]'
+          ok "стенд: без пароля → 401" '[ "$(curl -sS -m 20 -o /dev/null -w %{http_code} $S/articles/)" = 401 ]'
+          exit $FAIL
+      - name: Стенд закрыт от индексации
+        env:
+          BASIC_AUTH: ${{ secrets.STAND_AUTH }}
+        run: |
+          h=$(curl -sS -m 20 -u "$BASIC_AUTH" -o /dev/null -D - https://test.unitr.ru/articles/ | tr -d '\r')
+          echo "$h" | grep -q "^HTTP/[0-9.]* 200" && echo "$h" | grep -qi "^x-robots-tag:.*noindex" && echo "PASS  стенд: 200 с паролем, X-Robots-Tag noindex" || { echo "FAIL  стенд: noindex"; exit 1; }
