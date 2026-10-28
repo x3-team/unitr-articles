@@ -49,6 +49,7 @@ if ! lf "cd $DEPLOY_PATH; cls .htaccess.before-unitr-articles" >/dev/null 2>&1; 
     echo "== Первая выкладка: резервные копии *.before-unitr-articles"
     [ -s "$TMP/.htaccess" ] && lf "cd $DEPLOY_PATH; put $TMP/.htaccess -o .htaccess.before-unitr-articles"
     [ -f "$TMP/robots.txt" ] && lf "cd $DEPLOY_PATH; put $TMP/robots.txt -o robots.txt.before-unitr-articles"
+    lf "cd $DEPLOY_PATH; get -e -O $TMP sitemap.xml" >/dev/null 2>&1 && lf "cd $DEPLOY_PATH; put $TMP/sitemap.xml -o sitemap.xml.before-unitr-articles"
   fi
 fi
 
@@ -58,7 +59,10 @@ echo "== Страницы раздела (/articles/), удалённые ста
 lf "mirror -R $DRY --delete --no-perms --parallel=4 --exclude-glob _media/_next/ $SRC/articles $DEPLOY_PATH/articles"
 echo "== Карта сайта и robots.txt"
 lf "mirror -R $DRY --delete --no-perms $SRC/sitemaps $DEPLOY_PATH/sitemaps"
-[ -z "$DRY" ] && lf "cd $DEPLOY_PATH; put $SRC/sitemap.xml -o sitemap.xml; put $SRC/robots.txt -o robots.txt"
+# robots.txt: правила сайта (site-original/robots.txt — исходный файл SPA) + раздел, scripts/merge-robots.mjs
+node scripts/merge-robots.mjs "${ROBOTS_ORIGINAL:-site-original/robots.txt}" "$SRC/robots.txt" "$TMP/robots.final"
+echo "   robots.txt: $(grep -ci '^user-agent' "$TMP/robots.final") групп User-agent, $(grep -ci '^allow: /articles/' "$TMP/robots.final") × Allow: /articles/"
+[ -z "$DRY" ] && lf "cd $DEPLOY_PATH; put $SRC/sitemap.xml -o sitemap.xml; put $TMP/robots.final -o robots.txt"
 
 echo "== Блок раздела в корневом .htaccess"
 node scripts/merge-htaccess.mjs "$TMP/.htaccess" "$SRC/unitr-articles.htaccess" "$TMP/.htaccess.new"

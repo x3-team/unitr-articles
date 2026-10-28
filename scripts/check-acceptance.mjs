@@ -95,6 +95,14 @@ const metaNoindex = (res) => /noindex|none/i.test(metaContent(res.body, "robots"
 const headerNoindex = (res) => /noindex|none/i.test(res.headers.get("x-robots-tag") || "");
 // на стенде X-Robots-Tag: noindex задан намеренно (закрыт до показа заказчику), в счёт идёт только meta robots
 const noindex = (res) => metaNoindex(res) || (!STAND && headerNoindex(res));
+// все адреса карты сайта (sitemap.xml или индекс карт)
+async function sitemapLocs() {
+  const sm = await get("/sitemap.xml");
+  const own = (x) => [...x.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => decode(m[1]));
+  if (!/<sitemapindex/.test(sm.body)) return own(sm.body);
+  const parts = await Promise.all(own(sm.body).map((l) => get(l)));
+  return parts.flatMap((p) => own(p.body));
+}
 const sMaxAge = (res) => {
   const cc = res.headers.get("cache-control") || "";
   const m = /s-maxage=(\d+)/.exec(cc) || /max-age=(\d+)/.exec(cc);
@@ -112,12 +120,20 @@ async function main() {
   check("H1 «Статьи» в исходном HTML", h1.length === 1 && h1[0] === "Статьи", JSON.stringify(h1));
   const cardLinks = [...new Set(hrefs(arch.body).filter(isArticleHref).map(abs))];
   const cards = arch.body.match(/<article class="card"/g) || [];
-  check("10 анонсов на первой странице", cards.length === 10, `анонсов: ${cards.length}`);
-  check("Заголовки статей со ссылками (без JS)", cardLinks.length >= 10 && /<h2 class="card__title">[^<]+<\/h2>/.test(arch.body), `ссылок на статьи: ${cardLinks.length}`);
+  // сколько анонсов должно быть на первой странице: 10 или все статьи, если их меньше (по карте сайта)
+  const smLocs = await sitemapLocs();
+  const publishedCount = smLocs.filter((l) => isArticleHref(l)).length;
+  const firstPage = Math.min(10, publishedCount);
+  check(`${firstPage} анонсов на первой странице (статей в разделе: ${publishedCount})`, cards.length === firstPage && firstPage > 0, `анонсов: ${cards.length}`);
+  check("Заголовки статей со ссылками (без JS)", cardLinks.length >= firstPage && firstPage > 0 && /<h2 class="card__title">[^<]+<\/h2>/.test(arch.body), `ссылок на статьи: ${cardLinks.length}`);
   check("Анонс: обложка, excerpt, дата", /class="card__cover"><img [^>]*src="[^"]+"/.test(arch.body) && /class="card__excerpt">[^<]{20,}/.test(arch.body) && /<time dateTime="\d{4}-\d\d-\d\dT/.test(arch.body));
   check("canonical /articles/ → на себя", canonicalOf(arch.body) === `${BASE}/articles/`, canonicalOf(arch.body));
-  check("Пагинация: номера страниц и «Следующая»", /class="pager__num[^"]*"[^>]*>2</.test(arch.body) && /rel="next"[^>]*>Следующая|>Следующая/.test(arch.body) && hrefs(arch.body).some((h) => abs(h) === `${BASE}/articles/page/2/`));
-  check("<link rel=next> на /articles/page/2/", linkRel(arch.body, "next") === `${BASE}/articles/page/2/`, linkRel(arch.body, "next"));
+  if (publishedCount > 10) {
+    check("Пагинация: номера страниц и «Следующая»", /class="pager__num[^"]*"[^>]*>2</.test(arch.body) && /rel="next"[^>]*>Следующая|>Следующая/.test(arch.body) && hrefs(arch.body).some((h) => abs(h) === `${BASE}/articles/page/2/`));
+    check("<link rel=next> на /articles/page/2/", linkRel(arch.body, "next") === `${BASE}/articles/page/2/`, linkRel(arch.body, "next"));
+  } else {
+    check(`Пагинации нет — статей ${publishedCount} ≤ 10 (и нет rel=next)`, !linkRel(arch.body, "next") && !/class="pager__num[^"]*"[^>]*>2</.test(arch.body));
+  }
 
   const archTitle = titleOf(arch.body);
   const archDesc = metaContent(arch.body, "description");

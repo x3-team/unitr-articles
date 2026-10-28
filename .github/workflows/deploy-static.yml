@@ -76,6 +76,35 @@ jobs:
           cache: npm
       - run: npm ci
       - run: sudo apt-get install -y -q lftp >/dev/null
+      - name: Страницы и robots.txt основного сайта (до выкладки раздела)
+        # исходные sitemap.xml и robots.txt SPA (боевой каталог; копии *.before-unitr-articles после первой выкладки):
+        # страницы сайта остаются в карте сайта, правила robots.txt сохраняются
+        env:
+          SRC_DIR: ${{ vars.PROD_DIR || 'www/unitr.ru' }}
+          DEPLOY_HOST: ${{ secrets.HOSTING_SSH_HOST }}
+          DEPLOY_USER: ${{ secrets.HOSTING_SSH_USER }}
+          DEPLOY_PASSWORD: ${{ secrets.HOSTING_SSH_PASSWORD }}
+          CONFIGURED_PAGES: ${{ vars.SITE_STATIC_PAGES }}
+        run: |
+          mkdir -p site-original && cd site-original
+          for f in sitemap.xml robots.txt; do
+            lftp -u "$DEPLOY_USER,$DEPLOY_PASSWORD" -e "set sftp:auto-confirm yes; cd $SRC_DIR; get -e $f.before-unitr-articles -o $f; bye" "sftp://$DEPLOY_HOST" >/dev/null 2>&1 \
+              || lftp -u "$DEPLOY_USER,$DEPLOY_PASSWORD" -e "set sftp:auto-confirm yes; cd $SRC_DIR; get -e $f; bye" "sftp://$DEPLOY_HOST" >/dev/null 2>&1 || true
+          done
+          # уже карта раздела / robots раздела — это не исходные файлы сайта
+          grep -q "/sitemaps/" sitemap.xml 2>/dev/null && rm -f sitemap.xml
+          grep -qi "^Allow: /articles/" robots.txt 2>/dev/null && ! grep -qi "^User-agent: Yandex" robots.txt && rm -f robots.txt
+          cd ..
+          if [ -z "$CONFIGURED_PAGES" ] && [ -s site-original/sitemap.xml ]; then
+            PAGES=$(node scripts/site-pages-from-sitemap.mjs site-original/sitemap.xml)
+            echo "SITE_STATIC_PAGES=$PAGES" >> "$GITHUB_ENV"
+            echo "SITE_PAGES_SOURCE=static" >> "$GITHUB_ENV"
+            echo "страниц сайта из исходной карты: $(echo "$PAGES" | grep -o '"path"' | wc -l)"
+          else
+            echo "исходная карта сайта не найдена — страницы сайта из настроек / WordPress"
+            echo "SITE_STATIC_PAGES=$CONFIGURED_PAGES" >> "$GITHUB_ENV"
+          fi
+          [ -s site-original/robots.txt ] && echo "исходный robots.txt: $(grep -ci '^user-agent' site-original/robots.txt) групп User-agent" || echo "исходный robots.txt не найден"
       - name: Сборка из WordPress (manage.unitr.ru)
         run: npm run build:pages
         env:
@@ -89,7 +118,6 @@ jobs:
           WP_GRAPHQL_TOKEN: ${{ secrets.WP_GRAPHQL_TOKEN }}
           WP_GRAPHQL_AUTH: ${{ vars.WP_GRAPHQL_AUTH || 'basic' }}
           ARTICLES_CATEGORY: ${{ vars.ARTICLES_CATEGORY || 'poleznye-stati' }}
-          SITE_STATIC_PAGES: ${{ vars.SITE_STATIC_PAGES }}
           ROBOTS_EXTRA: ${{ vars.ROBOTS_EXTRA }}
       - name: Токен WordPress не попал в файлы сайта
         env:

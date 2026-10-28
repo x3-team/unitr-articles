@@ -189,8 +189,9 @@ export const graphqlSource: ContentSource = {
 
   async sitePages() {
     const pages: SitePage[] = [];
-    // Страницы WordPress (каталог и пр.), если они публикуются на основном сайте по тем же адресам
-    try {
+    // Страницы WordPress (каталог и пр.), если они публикуются на основном сайте по тем же адресам.
+    // SITE_PAGES_SOURCE=static — страницы сайта берутся только из SITE_STATIC_PAGES (исходная карта сайта SPA)
+    if (process.env.SITE_PAGES_SOURCE !== "static") try {
       const d = await wpQuery<{ pages: { nodes: { uri: string; modifiedGmt: string }[] } }>(
         `query { pages(first: 500, where: { status: PUBLISH }) { nodes { uri modifiedGmt } } }`,
       );
