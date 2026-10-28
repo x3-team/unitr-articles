@@ -460,9 +460,10 @@ a.pager__num:hover {
   padding-top: 56px;
   padding-bottom: 96px;
 }
-/* без блока «Может быть интересно» (в разделе одна статья) — текст на всю ширину контейнера, без пустого поля справа */
+/* без блока «Может быть интересно» (в разделе одна статья) — колонка текста той же ширины, что в макете */
 .post--single {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 936px);
+  justify-content: start;
 }
 .post__main {
   min-width: 0;
@@ -473,11 +474,6 @@ a.pager__num:hover {
 .post__cover img {
   width: 100%;
   border-radius: 2px;
-}
-/* на всю ширину обложка с естественными пропорциями была бы выше экрана — ограничиваем высоту */
-.post--single .post__cover img {
-  max-height: 720px;
-  object-fit: cover;
 }
 .prose {
   font-size: 18px;
@@ -781,7 +777,7 @@ a.pager__num:hover {
     grid-template-columns: minmax(0, 1fr) 320px;
   }
   .post--single {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 936px);
   }
 }
 
