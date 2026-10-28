@@ -3,7 +3,7 @@
 //
 //   node scripts/site-pages-from-sitemap.mjs <sitemap.xml>   → JSON [{"path","lastmod"}] для SITE_STATIC_PAGES
 //
-// Адреса раздела (/articles/…) пропускаются — их карта строится из WordPress. Без <lastmod> — дата сборки.
+// Адреса раздела (/articles/…) и прежние адреса (/blog, /poleznye-stati) пропускаются — их карта строится из WordPress. Без <lastmod> — дата сборки.
 import fs from "node:fs";
 
 const xml = fs.existsSync(process.argv[2] || "") ? fs.readFileSync(process.argv[2], "utf8") : "";
@@ -18,7 +18,8 @@ for (const m of xml.matchAll(/<url>([\s\S]*?)<\/url>/g)) {
   } catch {
     continue;
   }
-  if (/^\/articles(\/|$)/.test(path) || pages.some((p) => p.path === path)) continue;
+  // раздел и его прежние адреса (/blog, /poleznye-stati — теперь 301 на /articles/) в карту сайта не попадают
+  if (/^\/(articles|blog|poleznye-stati)(\/|$)/.test(path) || pages.some((p) => p.path === path)) continue;
   pages.push({ path, lastmod: /<lastmod>\s*([^<]+?)\s*<\/lastmod>/.exec(m[1])?.[1] || today });
 }
 process.stdout.write(JSON.stringify(pages));
