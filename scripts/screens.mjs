@@ -36,6 +36,17 @@ function measure() {
         }))
       : [],
     cover: box(q(".post__cover img")),
+    // стили и структура, пришедшие в тексте статьи из WordPress
+    proseStyle: prose ? [...prose.querySelectorAll("style")].map((st) => st.textContent.slice(0, 6000)) : [],
+    proseOutline: prose
+      ? (function outline(el, d) {
+          if (d > 4) return [];
+          return [...el.children].slice(0, 25).flatMap((c) => [
+            `${"  ".repeat(d)}<${c.tagName.toLowerCase()}${c.className ? "." + String(c.className).trim().split(/\s+/).join(".") : ""}> ${Math.round(c.getBoundingClientRect().width)}px «${(c.textContent || "").trim().slice(0, 40)}»`,
+            ...outline(c, d + 1),
+          ]);
+        })(prose, 0)
+      : [],
   };
 }
 
@@ -47,6 +58,7 @@ for (const url of urls) {
   const name = `${u.hostname}${u.pathname}`.replace(/[^a-z0-9]+/gi, "_").replace(/_$/, "");
   report[url] = {};
   for (const [label, viewport] of [["1440", { width: 1440, height: 900 }], ["390", { width: 390, height: 844 }]]) {
+    if (process.env.ONLY_1440 && label !== "1440") continue;
     const ctx = await browser.newContext({ httpCredentials, viewport });
     const page = await ctx.newPage();
     await page.goto(url, { waitUntil: "load", timeout: 45_000 });
