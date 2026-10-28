@@ -7,7 +7,8 @@ import { ARTICLES_PATH, LEGACY_PREFIXES } from "@/lib/paths";
  *     /blog/<slug>/ и /poleznye-stati/<slug>/ → 301 /articles/<slug>/ (адрес статьи сохраняется);
  *  2. прежний адрес статьи (slug изменили в WordPress) → 301 на актуальный;
  *  3. /articles/page/1/ → 301 /articles/ (дубль первой страницы);
- *  4. адрес без завершающего слеша → 301 на адрес со слешем (встроенный редирект Next.js — 308).
+ *  4. адрес без завершающего слеша → 301 на адрес со слешем (встроенный редирект Next.js — 308);
+ *  5. /ARTICLES/ и другой регистр префикса раздела → 301 /articles/ (как в .htaccess статической выкладки).
  * Несуществующие адреса внутри /articles/ обрабатываются шаблонами: notFound() → HTTP 404.
  */
 
@@ -50,6 +51,10 @@ export async function middleware(req: NextRequest) {
       return permanent(req, `${ARTICLES_PATH}${target}`);
     }
   }
+
+  // 5. Префикс раздела в другом регистре
+  const anyCase = /^\/articles(\/.*)?$/i.exec(path);
+  if (anyCase && !path.startsWith("/articles")) return permanent(req, withSlash(`/articles${anyCase[1] || ""}`));
 
   // 3. Дубль первой страницы пагинации
   const pageOne = /^(\/articles\/(?:category\/[^/]+\/)?)page\/1\/?$/.exec(path);
