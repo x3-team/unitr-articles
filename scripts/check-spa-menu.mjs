@@ -50,6 +50,14 @@ async function menuState(page) {
   });
 }
 
+// загрузка страницы SPA: на боевом сайте счётчики (Яндекс.Метрика) держат сеть занятой, networkidle не наступает —
+// ждём load и отрисовку шапки
+async function open(page, url) {
+  await page.goto(url, { waitUntil: "load", timeout: 45_000 });
+  await page.waitForSelector("header a[href]", { timeout: 20_000 }).catch(() => null);
+  await page.waitForTimeout(1000);
+}
+
 async function openMobileMenu(page) {
   // кнопка меню: aria-label / класс со словами menu, burger, hamburger, toggle (первая видимая)
   const btn = page.locator(
@@ -79,7 +87,7 @@ async function main() {
     // 2. десктоп
     const desk = await browser.newContext({ httpCredentials, viewport: { width: 1440, height: 900 } });
     const page = await desk.newPage();
-    await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+    await open(page, `${BASE}/`);
     check("После запуска SPA запасная навигация из исходного HTML убрана", (await page.locator("[data-unitr-prenav]").count()) === 0);
     if (INSPECT) {
       console.log("== Шапка главной (десктоп)\n" + (await page.evaluate(dump, { selector: "header, body > div > nav, #root > div > nav", limit: 2, max: 9 })));
@@ -94,7 +102,7 @@ async function main() {
     }, BASE);
 
     for (const path of ["/", ...pages]) {
-      if (path !== "/") await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
+      if (path !== "/") await open(page, `${BASE}${path}`);
       await page.waitForTimeout(300);
       const items = await menuState(page);
       const order = items.map((i) => i.text);
@@ -104,7 +112,7 @@ async function main() {
     }
 
     // 3. переход внутри SPA без перезагрузки — пункт не пропадает после перерисовки шапки
-    await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+    await open(page, `${BASE}/`);
     const inner = page.locator("header a[href]:not([href^='http']):not([href*='/articles'])").filter({ hasNotText: /^$/ });
     if ((await inner.count()) > 1) {
       await inner.nth(1).click();
@@ -114,7 +122,7 @@ async function main() {
     }
 
     // 4. переход по ссылке «Статьи»
-    await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+    await open(page, `${BASE}/`);
     const link = page.locator('a[href$="/articles/"]', { hasText: "Статьи" }).first();
     const [resp] = await Promise.all([
       page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => null),
@@ -127,7 +135,7 @@ async function main() {
     // 5. мобильное меню
     const mob = await browser.newContext({ httpCredentials, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const mp = await mob.newPage();
-    await mp.goto(`${BASE}/`, { waitUntil: "networkidle" });
+    await open(mp, `${BASE}/`);
     const opened = await openMobileMenu(mp);
     if (INSPECT) {
       console.log(`== Мобильная шапка (меню открыто: ${opened})\n` + (await mp.evaluate(dump, { selector: "header, nav, [class*=menu i], [role=dialog]", limit: 5, max: 7 })));
