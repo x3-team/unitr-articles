@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Юнит-Ресурс — раздел «Статьи»
  * Description: Подготовка WordPress (manage.unitr.ru) для раздела /articles/ сайта unitr.ru: рубрика poleznye-stati, SEO-поля статьи, латинские ЧПУ, поля WPGraphQL (unitrSeo, unitrOldSlugs, unitrArticlesSettings), вебхук ревалидации фронтенда и страница проверки.
- * Version: 1.3.0
+ * Version: 1.3.1
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: X3 Team
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'UNITR_ARTICLES_VERSION', '1.3.0' );
+define( 'UNITR_ARTICLES_VERSION', '1.3.1' );
 define( 'UNITR_ARTICLES_CATEGORY', 'poleznye-stati' );
 define( 'UNITR_ARTICLES_CATEGORY_NAME', 'Полезные статьи' );
 define( 'UNITR_ARTICLES_OPTION', 'unitr_articles_settings' );
@@ -102,19 +102,9 @@ add_action(
 /* -------------------------------------------------------------------------
  * Латинские ЧПУ статей (ТЗ, п. 1.2) по схеме транслитерации Яндекса. Ярлык, введённый вручную латиницей,
  * не меняется; кириллический (из заголовка или введённый вручную) переводится в латиницу.
- * Если установлен Cyr-To-Lat — работает он, но с той же таблицей Яндекса.
+ * Cyr-To-Lat (если стоит) строит адреса всех записей по своей таблице: адрес статьи, который он построил
+ * из заголовка, заменяется адресом по схеме Яндекса. Записи вне раздела остаются как у Cyr-To-Lat.
  * ---------------------------------------------------------------------- */
-
-add_filter(
-	'ctl_table',
-	function ( $table ) {
-		foreach ( unitr_articles_translit_table() as $cyr => $lat ) {
-			$table[ $cyr ] = $lat;
-			$table[ mb_strtoupper( $cyr, 'UTF-8' ) ] = ucfirst( $lat );
-		}
-		return $table;
-	}
-);
 
 /*
  * Только для статей раздела: записи других рубрик (новости и т.п.) не трогаем — их адреса может использовать
@@ -128,10 +118,23 @@ add_action(
 			return;
 		}
 		$slug = urldecode( (string) $post->post_name );
-		if ( '' === $slug || preg_match( '/^[a-z0-9-]+$/', $slug ) || ! unitr_articles_is_article( $post ) ) {
+		if ( '' === $slug || ! unitr_articles_is_article( $post ) ) {
 			return;
 		}
-		$latin = unitr_articles_latin_slug( $slug, $post->post_title );
+		if ( preg_match( '/^[a-z0-9-]+$/', $slug ) ) {
+			// латинский адрес: меняем, только если это адрес из заголовка по чужой таблице (Cyr-To-Lat), а не ярлык,
+			// введённый вручную (с суффиксом WordPress -2, -3… для повторов)
+			$auto = sanitize_title( $post->post_title );
+			if ( $auto !== $slug && ! preg_match( '/^' . preg_quote( $auto, '/' ) . '-\d+$/', $slug ) ) {
+				return;
+			}
+			$latin = unitr_articles_slugify( $post->post_title );
+			if ( '' === $latin || $latin === $slug || 0 === strpos( $slug, $latin . '-' ) ) {
+				return;
+			}
+		} else {
+			$latin = unitr_articles_latin_slug( $slug, $post->post_title );
+		}
 		if ( '' === $latin ) {
 			return;
 		}
@@ -139,6 +142,10 @@ add_action(
 		// напрямую в таблицу: повторное сохранение записи запустило бы все хуки ещё раз
 		global $wpdb;
 		$wpdb->update( $wpdb->posts, array( 'post_name' => $latin ), array( 'ID' => $post_id ) );
+		// опубликованная статья уже могла открываться по прежнему адресу — он отдаст 301 на новый
+		if ( 'publish' === $post->post_status && $slug !== $latin && preg_match( '/^[a-z0-9-]+$/', $slug ) ) {
+			add_post_meta( $post_id, '_wp_old_slug', $slug );
+		}
 		clean_post_cache( $post_id );
 	},
 	20,

@@ -60,6 +60,21 @@ wp_set_post_categories( $id4, array( $term->term_id ) );
 wp_update_post( array( 'ID' => $id4 ) );
 $ok( 'holodnyy-koridor-v-servernoy-kak-organizovat' === get_post_field( 'post_name', $id4 ), 'Рубрика, сохранённая после публикации (блочный редактор): адрес латинский при следующем сохранении', get_post_field( 'post_name', $id4 ) );
 
+// Cyr-To-Lat (стоит на manage.unitr.ru) транслитерирует адреса всех записей по своей таблице (ц → cz, й → j, щ → shh)
+$ctl = function ( $title ) {
+	$t = mb_strtolower( (string) $title, 'UTF-8' );
+	return strtr( $t, array_merge( unitr_articles_translit_table(), array( 'ц' => 'cz', 'й' => 'j', 'щ' => 'shh', 'ё' => 'yo' ) ) );
+};
+add_filter( 'sanitize_title', $ctl, 9 );
+$id5 = wp_insert_post( array( 'post_title' => 'Щит для ЦОД: йод', 'post_status' => 'publish', 'post_category' => array( $term->term_id ) ) );
+$ok( 'schit-dlya-cod-yod' === get_post_field( 'post_name', $id5 ), 'С Cyr-To-Lat: адрес статьи из заголовка — по схеме Яндекса', get_post_field( 'post_name', $id5 ) );
+$ok( in_array( 'shhit-dlya-czod-jod', get_post_meta( $id5, '_wp_old_slug' ), true ), '…адрес Cyr-To-Lat отдаёт 301 на новый', get_post_meta( $id5, '_wp_old_slug' ) );
+$id6 = wp_insert_post( array( 'post_title' => 'Щит для ЦОД: йод', 'post_name' => 'moj-adres', 'post_status' => 'publish', 'post_category' => array( $term->term_id ) ) );
+$ok( 'moj-adres' === get_post_field( 'post_name', $id6 ), 'С Cyr-To-Lat: латинский ярлык, введённый вручную, не меняется', get_post_field( 'post_name', $id6 ) );
+$id7 = wp_insert_post( array( 'post_title' => 'Цена щита', 'post_status' => 'publish' ) );
+$ok( 'czena-shhita' === get_post_field( 'post_name', $id7 ), 'С Cyr-To-Lat: адреса записей вне раздела — как у Cyr-To-Lat', get_post_field( 'post_name', $id7 ) );
+remove_filter( 'sanitize_title', $ctl, 9 );
+
 // 3. Очередь вебхука: публикация статьи
 $reasons = $GLOBALS['unitr_articles_revalidate_reasons'];
 $ok( (bool) preg_grep( '/^status:' . $id . ':new->publish$/', $reasons ), 'Публикация статьи ставит в очередь обновление сайта', $reasons );

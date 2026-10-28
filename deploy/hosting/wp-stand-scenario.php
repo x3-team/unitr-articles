@@ -264,9 +264,8 @@ $out( true, 'Плагины транслитерации адресов', $trans
 if ( function_exists( 'unitr_articles_slugify' ) ) {
 	$sample = unitr_articles_slugify( 'Щёточный ввод для шкафа ЦОД: хомуты и йод' );
 	$out( 'schetochnyy-vvod-dlya-shkafa-cod-homuty-i-yod' === $sample, 'ЧПУ по схеме Яндекса', $sample );
-	// адрес так, как его строит WordPress при сохранении записи (с Cyr-To-Lat — его транслитерация с таблицей раздела)
-	$wp_sample = urldecode( sanitize_title( 'Щёточный ввод для шкафа ЦОД: хомуты и йод' ) );
-	$out( preg_match( '/^[a-z0-9-]+$/', $wp_sample ) ? 'schetochnyy-vvod-dlya-shkafa-cod-homuty-i-yod' === $wp_sample : true, 'Адрес из заголовка в WordPress (sanitize_title)', $wp_sample );
+	// адрес, который WordPress (с Cyr-To-Lat — по его таблице) строит для записей вне раздела; статьям плагин ставит адрес по схеме Яндекса
+	$out( true, 'Адрес записей вне раздела (WordPress / Cyr-To-Lat)', urldecode( sanitize_title( 'Щёточный ввод для шкафа ЦОД: хомуты и йод' ) ) );
 }
 $out( function_exists( 'acf' ), 'ACF', function_exists( 'acf_get_local_field_group' ) && acf_get_local_field_group( 'group_unitr_article_seo' ) ? 'группа SEO-полей статьи зарегистрирована' : 'группа SEO не найдена — поля в своём блоке плагина' );
 
