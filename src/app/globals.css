@@ -474,6 +474,11 @@ a.pager__num:hover {
   width: 100%;
   border-radius: 2px;
 }
+/* на всю ширину обложка с естественными пропорциями была бы выше экрана — ограничиваем высоту */
+.post--single .post__cover img {
+  max-height: 720px;
+  object-fit: cover;
+}
 .prose {
   font-size: 18px;
   line-height: 1.55;
