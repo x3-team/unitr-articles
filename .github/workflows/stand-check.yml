@@ -8,12 +8,17 @@ on:
         description: Вывести структуру шапки SPA (отладка)
         type: boolean
         default: false
+      prod_preflight:
+        description: Только чтение публичных адресов боевого unitr.ru (robots, заголовки, sitemap)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   check:
+    if: ${{ !inputs.prod_preflight }}
     runs-on: ubuntu-latest
     env:
       SITE_URL: ${{ vars.STAND_URL || 'https://test.unitr.ru' }}
@@ -33,3 +38,19 @@ jobs:
           SECRET_VALUES: ${{ secrets.WP_GRAPHQL_TOKEN }}
       - if: always()
         run: cat menu.md acceptance.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+  # только чтение публичных адресов боевого сайта перед выкаткой
+  prod-preflight:
+    if: inputs.prod_preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Боевой unitr.ru (публичные адреса)
+        run: |
+          B=https://unitr.ru
+          echo "== robots.txt"; curl -sS -m 20 "$B/robots.txt" | head -60
+          for p in / /articles/ /blog/ /blog/x/ /poleznye-stati/ /poleznye-stati/x /sitemap.xml /catalog; do
+            echo "== $p"; curl -sS -m 20 -o /dev/null -D - "$B$p" | grep -iE '^(HTTP|location|content-type|x-robots-tag|cache-control)'
+          done
+          echo "== <head> главной (без скриптов)"; curl -sS -m 20 "$B/" | sed -n '/<head/,/<\/head>/p' | grep -viE '^\s*<script' | head -40
+          echo "== body главной"; curl -sS -m 20 "$B/" | sed -n '/<body/,/<\/body>/p' | head -20
+          echo "== sitemap.xml"; curl -sS -m 20 "$B/sitemap.xml" | head -c 1500; echo
