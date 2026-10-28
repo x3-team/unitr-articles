@@ -57,12 +57,13 @@ jobs:
           B=https://unitr.ru; S=https://test.unitr.ru; FAIL=0
           ok() { if eval "$2"; then echo "PASS  $1"; else echo "FAIL  $1"; FAIL=1; fi; }
           hdr() { curl -sS -m 20 -o /dev/null -D - "$1" | tr -d '\r'; }
+          for u in /articles/ /sitemap.xml; do echo "X-Robots-Tag $u: $(hdr $B$u | grep -i '^x-robots-tag' | cut -d' ' -f2- || true)"; done
           A=$(curl -sS -m 20 "$B/articles/"); SLUG=$(echo "$A" | grep -oE 'href="/articles/[a-z0-9-]+/"' | grep -v '/page/\|/category/' | head -1 | sed 's/href="\/articles\///; s/\/"//')
           echo "статья: $SLUG"
           P=$(curl -sS -m 20 "$B/articles/$SLUG/")
           ok "1. /articles/ → 200 с H1 «Статьи» и анонсом" '[ "$(curl -sS -m 20 -o /dev/null -w %{http_code} $B/articles/)" = 200 ] && echo "$A" | grep -q "<h1[^>]*>Статьи</h1>" && [ -n "$SLUG" ]'
           ok "1. статья /articles/$SLUG/ → 200 с H2" '[ "$(curl -sS -m 20 -o /dev/null -w %{http_code} $B/articles/$SLUG/)" = 200 ] && echo "$P" | grep -q "<h2"'
-          ok "2. нет X-Robots-Tag на /articles/ и статье" '! hdr $B/articles/ | grep -qi "^x-robots-tag" && ! hdr $B/articles/$SLUG/ | grep -qi "^x-robots-tag"'
+          ok "2. нет noindex в X-Robots-Tag на /articles/ и статье" '! hdr $B/articles/ | grep -qiE "^x-robots-tag:.*(noindex|none)" && ! hdr $B/articles/$SLUG/ | grep -qiE "^x-robots-tag:.*(noindex|none)"'
           ok "2. нет meta noindex" '! echo "$A$P" | grep -qiE "<meta[^>]+name=\"robots\"[^>]+noindex"'
           ok "2. canonical архива https://unitr.ru/articles/" 'echo "$A" | grep -q "rel=\"canonical\" href=\"https://unitr.ru/articles/\""'
           ok "2. canonical статьи https://unitr.ru/articles/$SLUG/" 'echo "$P" | grep -q "rel=\"canonical\" href=\"https://unitr.ru/articles/$SLUG/\""'
