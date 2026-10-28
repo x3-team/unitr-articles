@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Юнит-Ресурс — раздел «Статьи»
  * Description: Подготовка WordPress (manage.unitr.ru) для раздела /articles/ сайта unitr.ru: рубрика poleznye-stati, SEO-поля статьи, латинские ЧПУ, поля WPGraphQL (unitrSeo, unitrOldSlugs, unitrArticlesSettings), вебхук ревалидации фронтенда и страница проверки.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: X3 Team
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'UNITR_ARTICLES_VERSION', '1.2.0' );
+define( 'UNITR_ARTICLES_VERSION', '1.3.0' );
 define( 'UNITR_ARTICLES_CATEGORY', 'poleznye-stati' );
 define( 'UNITR_ARTICLES_CATEGORY_NAME', 'Полезные статьи' );
 define( 'UNITR_ARTICLES_OPTION', 'unitr_articles_settings' );
@@ -100,8 +100,21 @@ add_action(
 );
 
 /* -------------------------------------------------------------------------
- * Латинские ЧПУ статей (ТЗ, п. 1.2). Если установлен Cyr-To-Lat — работает он.
+ * Латинские ЧПУ статей (ТЗ, п. 1.2) по схеме транслитерации Яндекса. Ярлык, введённый вручную латиницей,
+ * не меняется; кириллический (из заголовка или введённый вручную) переводится в латиницу.
+ * Если установлен Cyr-To-Lat — работает он, но с той же таблицей Яндекса.
  * ---------------------------------------------------------------------- */
+
+add_filter(
+	'ctl_table',
+	function ( $table ) {
+		foreach ( unitr_articles_translit_table() as $cyr => $lat ) {
+			$table[ $cyr ] = $lat;
+			$table[ mb_strtoupper( $cyr, 'UTF-8' ) ] = ucfirst( $lat );
+		}
+		return $table;
+	}
+);
 
 /*
  * Только для статей раздела: записи других рубрик (новости и т.п.) не трогаем — их адреса может использовать

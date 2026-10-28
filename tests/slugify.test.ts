@@ -5,10 +5,13 @@ import { isLatinSlug, latinSlug, slugify } from "../src/lib/slugify";
 test("ЧПУ на латинице из заголовка", () => {
   assert.equal(
     slugify("Как выбрать серверный шкаф: 7 параметров, которые важно проверить до заказа"),
-    "kak-vybrat-servernyj-shkaf-7-parametrov-kotorye-vazhno-proverit-do-zakaza",
+    "kak-vybrat-servernyy-shkaf-7-parametrov-kotorye-vazhno-proverit-do-zakaza",
   );
-  assert.equal(slugify("Щёточные «вводы» и ИБП — 2N"), "shhyotochnye-vvody-i-ibp-2n");
-  assert.equal(slugify("Цена: 100% ёлка!"), "czena-100-yolka");
+  // схема Яндекса: ё → e, й → y, х → h, ц → c, щ → sch, ъ и ь опускаются
+  assert.equal(slugify("Щёточные «вводы» и ИБП — 2N"), "schetochnye-vvody-i-ibp-2n");
+  assert.equal(slugify("Цена: 100% ёлка!"), "cena-100-elka");
+  assert.equal(slugify("Шкафы ЦОД 42U/48U/52U"), "shkafy-cod-42u-48u-52u");
+  assert.equal(slugify("Объём хранилища и подъезд"), "obem-hranilischa-i-podezd");
 });
 
 test("ограничение длины по границе слова", () => {

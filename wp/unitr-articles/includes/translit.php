@@ -1,6 +1,6 @@
 <?php
 /**
- * Транслитерация заголовка в ЧПУ — та же таблица, что во фронтенде (src/lib/slugify.ts),
+ * Транслитерация заголовка в ЧПУ по схеме Яндекса — та же таблица, что во фронтенде (src/lib/slugify.ts),
  * чтобы адреса, построенные на сервере WordPress и во фронтенде, совпадали.
  */
 
@@ -8,17 +8,21 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-function unitr_articles_slugify( $input, $max_length = 80 ) {
-	static $map = array(
-		'а' => 'a', 'б' => 'b', 'в' => 'v', 'г' => 'g', 'д' => 'd', 'е' => 'e', 'ё' => 'yo', 'ж' => 'zh',
-		'з' => 'z', 'и' => 'i', 'й' => 'j', 'к' => 'k', 'л' => 'l', 'м' => 'm', 'н' => 'n', 'о' => 'o',
-		'п' => 'p', 'р' => 'r', 'с' => 's', 'т' => 't', 'у' => 'u', 'ф' => 'f', 'х' => 'h', 'ц' => 'cz',
-		'ч' => 'ch', 'ш' => 'sh', 'щ' => 'shh', 'ъ' => '', 'ы' => 'y', 'ь' => '', 'э' => 'e', 'ю' => 'yu',
+/** Таблица Яндекса: ё → e, й → y, х → h, ц → c, щ → sch, ъ и ь опускаются. */
+function unitr_articles_translit_table() {
+	return array(
+		'а' => 'a', 'б' => 'b', 'в' => 'v', 'г' => 'g', 'д' => 'd', 'е' => 'e', 'ё' => 'e', 'ж' => 'zh',
+		'з' => 'z', 'и' => 'i', 'й' => 'y', 'к' => 'k', 'л' => 'l', 'м' => 'm', 'н' => 'n', 'о' => 'o',
+		'п' => 'p', 'р' => 'r', 'с' => 's', 'т' => 't', 'у' => 'u', 'ф' => 'f', 'х' => 'h', 'ц' => 'c',
+		'ч' => 'ch', 'ш' => 'sh', 'щ' => 'sch', 'ъ' => '', 'ы' => 'y', 'ь' => '', 'э' => 'e', 'ю' => 'yu',
 		'я' => 'ya', 'і' => 'i', 'ї' => 'yi', 'є' => 'ye', 'ґ' => 'g',
 	);
+}
+
+function unitr_articles_slugify( $input, $max_length = 80 ) {
 	$s = function_exists( 'mb_strtolower' ) ? mb_strtolower( (string) $input, 'UTF-8' ) : strtolower( (string) $input );
 	$s = str_replace( array( '«', '»', '"', "'", '’', '“', '”' ), '', $s );
-	$s = strtr( $s, $map );
+	$s = strtr( $s, unitr_articles_translit_table() );
 	if ( function_exists( 'remove_accents' ) ) {
 		$s = remove_accents( $s );
 	}

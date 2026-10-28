@@ -259,6 +259,12 @@ foreach ( array( 'unitr-articles/unitr-articles.php' => 'Плагин разде
 	$data = file_exists( WP_PLUGIN_DIR . "/$file" ) ? get_plugin_data( WP_PLUGIN_DIR . "/$file", false, false ) : array();
 	$out( in_array( $file, $active, true ), $name . ' активен', $data['Version'] ?? 'нет' );
 }
+$translit_plugins = array_values( preg_grep( '/cyr|translit|rus-?to-?lat/i', $active ) );
+$out( true, 'Плагины транслитерации адресов', $translit_plugins ? implode( ', ', $translit_plugins ) : 'нет — ЧПУ статей строит плагин раздела' );
+if ( function_exists( 'unitr_articles_slugify' ) ) {
+	$sample = unitr_articles_slugify( 'Щёточный ввод для шкафа ЦОД: хомуты и йод' );
+	$out( 'schetochnyy-vvod-dlya-shkafa-cod-homuty-i-yod' === $sample, 'ЧПУ по схеме Яндекса', $sample );
+}
 $out( function_exists( 'acf' ), 'ACF', function_exists( 'acf_get_local_field_group' ) && acf_get_local_field_group( 'group_unitr_article_seo' ) ? 'группа SEO-полей статьи зарегистрирована' : 'группа SEO не найдена — поля в своём блоке плагина' );
 
 $term = get_term_by( 'slug', $category, 'category' );

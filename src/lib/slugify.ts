@@ -1,11 +1,12 @@
 /**
- * ЧПУ на латинице из заголовка статьи (транслитерация по ГОСТ 7.79-2000, система Б,
- * в упрощённом «веб»-варианте, как у плагина Cyr-To-Lat для WordPress).
+ * ЧПУ на латинице из заголовка статьи — транслитерация по схеме Яндекса (как Яндекс сопоставляет
+ * латинские слова в адресе с запросом на кириллице): ё → e, й → y, х → h, ц → c, щ → sch, ъ и ь опускаются.
+ * Та же таблица — в WP-плагине раздела (wp/unitr-articles/includes/translit.php).
  */
-const MAP: Record<string, string> = {
-  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "yo", ж: "zh", з: "z", и: "i", й: "j",
+export const TRANSLIT: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i", й: "y",
   к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f",
-  х: "h", ц: "cz", ч: "ch", ш: "sh", щ: "shh", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
+  х: "h", ц: "c", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
   і: "i", ї: "yi", є: "ye", ґ: "g",
 };
 
@@ -14,7 +15,7 @@ export function slugify(input: string, maxLength = 80): string {
     .toLowerCase()
     .replace(/[«»"'’“”]/g, "")
     .split("")
-    .map((ch) => (ch in MAP ? MAP[ch] : ch))
+    .map((ch) => (ch in TRANSLIT ? TRANSLIT[ch] : ch))
     .join("")
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "");

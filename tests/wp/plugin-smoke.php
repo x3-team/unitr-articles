@@ -47,7 +47,7 @@ $id  = wp_insert_post(
 	)
 );
 $slug = get_post_field( 'post_name', $id );
-$ok( 'kak-vybrat-servernyj-shkaf-7-parametrov' === $slug, 'Кириллический заголовок → латинский ЧПУ', $slug );
+$ok( 'kak-vybrat-servernyy-shkaf-7-parametrov' === $slug, 'Кириллический заголовок → латинский ЧПУ', $slug );
 $ok( unitr_articles_is_article( $id ), 'Запись подрубрики относится к разделу «Статьи»' );
 $id3 = wp_insert_post( array( 'post_title' => 'Заземление шкафа', 'post_status' => 'publish', 'post_name' => 'Заземление-ТШ', 'post_category' => array( $term->term_id ) ) );
 $ok( 'zazemlenie-tsh' === get_post_field( 'post_name', $id3 ), 'Кириллический адрес статьи, введённый вручную, переводится в латиницу', get_post_field( 'post_name', $id3 ) );
@@ -102,7 +102,7 @@ $ok( 2 === count( $requests ), 'При обоих способах уходят 
 
 // 8. Ссылка «Просмотреть» на сайт
 clean_post_cache( $id );
-$ok( 'https://unitr.ru/articles/kak-vybrat-servernyj-shkaf-7-parametrov/' === get_permalink( $id ), 'Ссылка «Просмотреть» ведёт на unitr.ru/articles/<адрес>/', get_permalink( $id ) );
+$ok( 'https://unitr.ru/articles/kak-vybrat-servernyy-shkaf-7-parametrov/' === get_permalink( $id ), 'Ссылка «Просмотреть» ведёт на unitr.ru/articles/<адрес>/', get_permalink( $id ) );
 $ok( false === strpos( get_permalink( $id2 ), 'unitr.ru/articles' ), 'Записи вне раздела ссылаются как раньше' );
 
 // 9. Снятие с публикации и изменение рубрик ставят обновление в очередь
