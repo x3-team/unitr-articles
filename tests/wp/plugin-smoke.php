@@ -58,7 +58,7 @@ $ok( ! unitr_articles_is_article( $id2 ), 'Запись вне рубрики н
 $id4 = wp_insert_post( array( 'post_title' => 'Холодный коридор в серверной: как организовать', 'post_status' => 'publish' ) );
 wp_set_post_categories( $id4, array( $term->term_id ) );
 wp_update_post( array( 'ID' => $id4 ) );
-$ok( 'holodnyj-koridor-v-servernoj-kak-organizovat' === get_post_field( 'post_name', $id4 ), 'Рубрика, сохранённая после публикации (блочный редактор): адрес латинский при следующем сохранении', get_post_field( 'post_name', $id4 ) );
+$ok( 'holodnyy-koridor-v-servernoy-kak-organizovat' === get_post_field( 'post_name', $id4 ), 'Рубрика, сохранённая после публикации (блочный редактор): адрес латинский при следующем сохранении', get_post_field( 'post_name', $id4 ) );
 
 // 3. Очередь вебхука: публикация статьи
 $reasons = $GLOBALS['unitr_articles_revalidate_reasons'];
