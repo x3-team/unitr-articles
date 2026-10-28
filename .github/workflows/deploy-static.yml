@@ -59,7 +59,7 @@ jobs:
     concurrency:
       group: deploy-static-${{ matrix.target }}
       cancel-in-progress: false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright 1.56 ставит зависимости Chromium только на 24.04
     env:
       SITE_URL: ${{ matrix.target == 'production' && (vars.PROD_SITE_URL || 'https://unitr.ru') || (vars.STAND_URL || 'https://test.unitr.ru') }}
       DEPLOY_PATH: ${{ matrix.target == 'production' && (vars.PROD_DIR || 'www/unitr.ru') || (vars.STAND_DIR || 'www/test.unitr.ru') }}
