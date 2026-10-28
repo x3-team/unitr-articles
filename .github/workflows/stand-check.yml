@@ -12,13 +12,17 @@ on:
         description: Только чтение публичных адресов боевого unitr.ru (robots, заголовки, sitemap)
         type: boolean
         default: false
+      screens:
+        description: Только скриншоты и размеры вёрстки (адреса через пробел)
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
   check:
-    if: ${{ !inputs.prod_preflight }}
+    if: ${{ !inputs.prod_preflight && !inputs.screens }}
     runs-on: ubuntu-24.04  # Playwright 1.56 ставит зависимости Chromium только на 24.04
     env:
       SITE_URL: ${{ vars.STAND_URL || 'https://test.unitr.ru' }}
@@ -89,3 +93,23 @@ jobs:
         run: |
           h=$(curl -sS -m 20 -u "$BASIC_AUTH" -o /dev/null -D - https://test.unitr.ru/articles/ | tr -d '\r')
           echo "$h" | grep -q "^HTTP/[0-9.]* 200" && echo "$h" | grep -qi "^x-robots-tag:.*noindex" && echo "PASS  стенд: 200 с паролем, X-Robots-Tag noindex" || { echo "FAIL  стенд: noindex"; exit 1; }
+
+  # скриншоты и размеры вёрстки страниц (стенд — с Basic Auth)
+  screens:
+    if: inputs.screens
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm i --no-save --no-package-lock playwright@1.56.1 >/dev/null && npx playwright install --with-deps chromium >/dev/null
+      - env:
+          BASIC_AUTH: ${{ secrets.STAND_AUTH }}
+          URLS: ${{ inputs.screens }}
+        run: node scripts/screens.mjs screens $URLS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screens
+          path: screens/
+          retention-days: 7
