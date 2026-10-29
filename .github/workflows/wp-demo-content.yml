@@ -142,6 +142,15 @@ jobs:
           echo "  POST /wp-json/wp/v2/posts (черновик) → $(req POST /wp-json/wp/v2/posts 1 '{"title":"Проверка REST API (удаляется автоматически)","status":"draft"}')"
           ID=$(jq -r '.id // empty' r.json 2>/dev/null)
           if [ -n "$ID" ]; then echo "  DELETE /wp-json/wp/v2/posts/<черновик>?force=true → $(req DELETE "/wp-json/wp/v2/posts/$ID?force=true" 1)"; fi
+          echo "  GET ?rest_route=/wp/v2/users/me → $(req GET '/?rest_route=/wp/v2/users/me' 1)"
+          # тот же секрет: похож ли он на пароль приложения (24 символа без пробелов) и узнаёт ли его GraphQL — без вывода значений
+          PW=${WP_GRAPHQL_TOKEN#*:}; PW=${PW// /}
+          echo "секрет: логин:пароль — $([[ $WP_GRAPHQL_TOKEN == *:* ]] && echo да || echo нет); формат пароля приложения — $([[ $PW =~ ^[A-Za-z0-9]{24}$ ]] && echo да || echo нет)"
+          for a in "" 1; do
+            h=(-H 'Content-Type: application/json'); [ -n "$a" ] && h+=(-H "$AUTH")
+            v=$(curl -sS "${h[@]}" --data '{"query":"{viewer{databaseId}}"}' "$WP/graphql" | jq -r 'if .data.viewer then "пользователь распознан" else "аноним" end' 2>/dev/null)
+            echo "  GraphQL viewer $([ -n "$a" ] && echo 'с паролем' || echo 'без авторизации') → $v"
+          done
           rm -f r.json
       - name: Резервная копия
         if: inputs.action == 'backup'
