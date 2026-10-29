@@ -126,6 +126,18 @@ if ( 'rest' === $mode ) {
 	wp_set_current_user( 0 );
 	$err = apply_filters( 'rest_authentication_errors', null );
 	WP_CLI::log( 'rest_authentication_errors для анонима: ' . ( is_wp_error( $err ) ? $err->get_error_code() . ' (' . (int) ( $err->get_error_data()['status'] ?? 0 ) . ')' : var_export( $err, true ) ) );
+	// то же для внешнего запроса к /wp-json/wp/v2/posts: аноним и вошедший редактор/администратор (имена не выводим)
+	$admins = get_users( array( 'role__in' => array( 'administrator', 'editor' ), 'fields' => 'ID', 'number' => 1 ) );
+	foreach ( array( 'GET', 'POST' ) as $method ) {
+		foreach ( array( 'аноним' => 0, 'вошедший редактор' => (int) ( $admins[0] ?? 0 ) ) as $who => $uid ) {
+			$_SERVER['REQUEST_METHOD'] = $method;
+			$_SERVER['REQUEST_URI']    = '/wp-json/wp/v2/posts';
+			wp_set_current_user( $uid );
+			$err = apply_filters( 'rest_authentication_errors', null );
+			WP_CLI::log( "  {$method} /wp-json/wp/v2/posts, {$who}: " . ( is_wp_error( $err ) ? $err->get_error_code() : var_export( $err, true ) ) );
+		}
+	}
+	wp_set_current_user( 0 );
 	return;
 }
 
