@@ -6,7 +6,7 @@
 //
 //   --mode=server  — боевой режим (Node.js): ожидаются настоящие HTTP 301, заголовки кеша, вебхук.
 //   --mode=static  — боевой статический вариант (хостинг без Node.js, Apache + .htaccess): настоящие 301 и 404,
-//                    кеш HTML ≤ 900 с, обновление — пересборкой каждые 10 минут (deploy-static.yml).
+//                    кеш HTML ≤ 900 с, обновление — пересборка по событию из WordPress и раз в час по расписанию (deploy-static.yml).
 //   --mode=pages   — статическое демо на GitHub Pages: 301 эмулируются страницами-переадресациями.
 //   HOME_URL=...   — адрес главной страницы сайта для сравнения title/description (по умолчанию BASE_URL/).
 //   SECRET_VALUES=a,b — значения секретов, которых не должно быть в клиентском JS.
@@ -238,7 +238,7 @@ async function main() {
       const wh = await fetch(`${BASE}/api/revalidate/`, { method: "POST" });
       check("Вебхук ревалидации существует и защищён секретом (без секрета → 401)", wh.status === 401, `HTTP ${wh.status}`);
     } else {
-      check("Обновление: пересборка и выкладка каждые 10 минут (.github/workflows/deploy-static.yml)", true, "", { soft: true });
+      check("Обновление: пересборка по публикации в WordPress и раз в час по расписанию (.github/workflows/deploy-static.yml)", true, "", { soft: true });
     }
   } else {
     check("Pages: кеш CDN ≤ 900 с", (sMaxAge(arch) ?? 0) <= 900, arch.headers.get("cache-control") || "нет заголовка");

@@ -66,7 +66,7 @@ export function buildApache({ out, rules, assetPrefix }) {
     "</IfModule>",
     "",
     "<IfModule mod_headers.c>",
-    "# индексация раздела явно разрешена, кеш страниц ≤ 5 минут (обновление раздела — каждые 10 минут)",
+    "# индексация раздела явно разрешена, кеш страниц ≤ 5 минут (обновление раздела — сразу после публикации в WordPress, страховочно раз в час)",
     'Header always set X-Robots-Tag "all"',
     '<FilesMatch "\\.html$">',
     'Header set Cache-Control "public, max-age=300, must-revalidate"',
