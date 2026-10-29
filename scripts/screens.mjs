@@ -70,7 +70,22 @@ function measureHeader() {
   const logoLink =
     [...header.querySelectorAll("a")].find((a) => visible(a) && /^(\/|https?:\/\/[^/]+\/?)$/.test(a.getAttribute("href") || "") && a.querySelector("img,svg")) ||
     [...header.querySelectorAll("a")].find((a) => visible(a) && a.querySelector("img,svg"));
-  const media = logoLink ? [...logoLink.querySelectorAll("img,svg")].filter(visible) : [];
+  // логотип — первая видимая картинка слева в шапке (в SPA он не обёрнут ссылкой)
+  const media = [...header.querySelectorAll("img,svg")]
+    .filter((m) => visible(m) && !m.closest("button") && m.getBoundingClientRect().x < 150 && m.getBoundingClientRect().width > 16)
+    .slice(0, 1);
+  const chain = (el) => {
+    const out = [];
+    for (let e = el?.parentElement; e && e !== header.parentElement; e = e.parentElement)
+      out.push({ tag: e.tagName.toLowerCase(), cls: String(e.className).slice(0, 120), ...box(e), ...st(e, ["paddingLeft", "paddingRight", "paddingTop", "display", "alignItems", "justifyContent"]) });
+    return out;
+  };
+  const fontFaces = [];
+  for (const sh of document.styleSheets) {
+    try {
+      for (const r of sh.cssRules) if (r.constructor.name === "CSSFontFaceRule") fontFaces.push(r.cssText.slice(0, 400));
+    } catch {}
+  }
   const links = [...header.querySelectorAll("a, button")]
     .filter((el) => visible(el) && (el.textContent || "").trim())
     .slice(0, 12)
@@ -93,8 +108,10 @@ function measureHeader() {
       viewBox: m.getAttribute("viewBox"),
       outerHTML: m.tagName.toLowerCase() === "svg" ? m.outerHTML.slice(0, 12000) : m.outerHTML.slice(0, 600),
     })),
+    logoParents: chain(media[0]),
     links,
     bodyFont: getComputedStyle(document.body).fontFamily,
+    fontFaces: fontFaces.slice(0, 20),
   };
 }
 
