@@ -75,6 +75,13 @@ $id7 = wp_insert_post( array( 'post_title' => 'Цена щита', 'post_status'
 $ok( 'czena-shhita' === get_post_field( 'post_name', $id7 ), 'С Cyr-To-Lat: адреса записей вне раздела — как у Cyr-To-Lat', get_post_field( 'post_name', $id7 ) );
 remove_filter( 'sanitize_title', $ctl, 9 );
 
+// Пароли приложений для REST API: запросы /wp-json/… распознаются как API с самого начала
+$ok( unitr_articles_is_rest_uri( '/wp-json/wp/v2/posts?per_page=1' ) && unitr_articles_is_rest_uri( '/wp-json' ) && ! unitr_articles_is_rest_uri( '/articles/wp-json-guide/' ), 'REST: адреса /wp-json/ распознаются, другие — нет' );
+$_SERVER['REQUEST_URI'] = '/wp-json/wp/v2/posts';
+$ok( true === apply_filters( 'application_password_is_api_request', false ), 'REST: пароль приложения проверяется для /wp-json/' );
+$_SERVER['REQUEST_URI'] = '/sample-page/';
+$ok( false === apply_filters( 'application_password_is_api_request', false ), 'REST: для обычных страниц — нет' );
+
 // 3. Очередь вебхука: публикация статьи
 $reasons = $GLOBALS['unitr_articles_revalidate_reasons'];
 $ok( (bool) preg_grep( '/^status:' . $id . ':new->publish$/', $reasons ), 'Публикация статьи ставит в очередь обновление сайта', $reasons );

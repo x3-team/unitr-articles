@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Юнит-Ресурс — раздел «Статьи»
  * Description: Подготовка WordPress (manage.unitr.ru) для раздела /articles/ сайта unitr.ru: рубрика poleznye-stati, SEO-поля статьи, латинские ЧПУ, поля WPGraphQL (unitrSeo, unitrOldSlugs, unitrArticlesSettings), вебхук ревалидации фронтенда и страница проверки.
- * Version: 1.3.1
+ * Version: 1.3.2
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: X3 Team
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'UNITR_ARTICLES_VERSION', '1.3.1' );
+define( 'UNITR_ARTICLES_VERSION', '1.3.2' );
 define( 'UNITR_ARTICLES_CATEGORY', 'poleznye-stati' );
 define( 'UNITR_ARTICLES_CATEGORY_NAME', 'Полезные статьи' );
 define( 'UNITR_ARTICLES_OPTION', 'unitr_articles_settings' );
@@ -28,6 +28,7 @@ require_once __DIR__ . '/includes/fields.php';
 require_once __DIR__ . '/includes/graphql.php';
 require_once __DIR__ . '/includes/webhook.php';
 require_once __DIR__ . '/includes/check.php';
+require_once __DIR__ . '/includes/rest-auth.php';
 
 /* -------------------------------------------------------------------------
  * Активация: рубрика и настройки по умолчанию
