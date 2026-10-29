@@ -116,6 +116,7 @@ ol {
   z-index: 50;
   background: #fff;
   border-bottom: 1px solid var(--c-header-line);
+  letter-spacing: normal; /* как в шапке SPA: разрядка текста раздела на неё не распространяется */
 }
 .header__toggle {
   position: absolute;

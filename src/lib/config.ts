@@ -17,7 +17,7 @@ export const SITE_NAME = "Юнит-Ресурс";
 export const SITE_LOCALE = "ru_RU";
 export const ORGANIZATION = {
   name: "ООО «Юнит-Ресурс»",
-  phone: "+7 (499) 444-14-57",
+  phone: "+7 (499) 444-1457",
   email: "info@ratep-inn.ru",
   address: "142201, Московская область, г. Серпухов, ул. Коншиных, д. 108",
 };
