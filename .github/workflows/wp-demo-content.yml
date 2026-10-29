@@ -125,7 +125,8 @@ jobs:
           WP=$(node -e 'console.log(new URL(process.env.WP_GRAPHQL_URL).origin)')
           AUTH="Authorization: Basic $(printf '%s' "$WP_GRAPHQL_TOKEN" | base64 -w0)"
           req() { # метод путь [авторизация] [тело] → «код ответа, code из JSON»
-            local m=$1 p=$2 a=${3:-} d=${4:-} args=(-sS -o r.json -w '%{http_code}' -X "$m")
+            local m=$1 p=$2 a=${3:-} d=${4:-}
+            local args=(-sS -o r.json -w '%{http_code}' -X "$m")
             [ -n "$a" ] && args+=(-H "$AUTH")
             [ -n "$d" ] && args+=(-H 'Content-Type: application/json' --data "$d")
             local c; c=$(curl "${args[@]}" "$WP$p" || true)

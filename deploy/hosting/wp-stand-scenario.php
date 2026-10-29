@@ -81,7 +81,9 @@ if ( 'rest' === $mode ) {
 	WP_CLI::log( 'Активные плагины: ' . implode( ', ', array_map( 'dirname', (array) get_option( 'active_plugins', array() ) ) ) );
 	$mu = function_exists( 'get_mu_plugins' ) ? array_keys( get_mu_plugins() ) : array();
 	WP_CLI::log( 'MU-плагины: ' . ( $mu ? implode( ', ', $mu ) : 'нет' ) );
-	WP_CLI::log( 'Пароли приложений: поддерживаются (HTTPS) — ' . ( wp_is_application_passwords_supported() ? 'да' : 'нет' ) . ', доступны — ' . ( wp_is_application_passwords_available() ? 'да' : 'нет' ) );
+	// в WP-CLI нет HTTPS, поэтому поддержка паролей приложений проверяется как для веб-запроса по https
+	$_SERVER['HTTPS'] = 'on';
+	WP_CLI::log( 'Пароли приложений (как для запроса по HTTPS): поддерживаются — ' . ( wp_is_application_passwords_supported() ? 'да' : 'нет' ) . ', доступны — ' . ( wp_is_application_passwords_available() ? 'да' : 'нет' ) );
 	WP_CLI::log( 'Константа WP_ENVIRONMENT_TYPE: ' . wp_get_environment_type() );
 	foreach ( array( 'rest_authentication_errors', 'wp_is_application_passwords_available', 'application_password_is_api_request', 'determine_current_user', 'rest_endpoints', 'rest_pre_dispatch', 'rest_enabled', 'rest_jsonp_enabled', 'authenticate' ) as $tag ) {
 		$l = $hooks( $tag );
