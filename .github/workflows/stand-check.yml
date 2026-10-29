@@ -16,6 +16,10 @@ on:
         description: Только скриншоты и размеры вёрстки (адреса через пробел)
         type: string
         default: ""
+      header:
+        description: Для screens — сравнить шапку (логотип, меню) вместо вёрстки статьи
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -107,6 +111,7 @@ jobs:
       - env:
           BASIC_AUTH: ${{ secrets.STAND_AUTH }}
           URLS: ${{ inputs.screens }}
+          HEADER: ${{ inputs.header && '1' || '' }}
         run: node scripts/screens.mjs screens $URLS
       - uses: actions/upload-artifact@v4
         with:

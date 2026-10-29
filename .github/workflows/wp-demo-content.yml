@@ -10,6 +10,9 @@
 #   measure       — замер автообновления: статья post_id пересохраняется в WordPress (текст не меняется), событие
 #                   уходит в GitHub; время до новой даты изменения на боевом unitr.ru и в sitemap.xml;
 #   frontend      — адрес сайта в плагине: https://unitr.ru (настройки раздела и UNITR_FRONTEND_URL в wp-config.php);
+#   rest          — REST API WordPress: кто закрывает его анонимам (плагины, фильтры), доступны ли пароли приложений;
+#                   запросы без авторизации и с паролем приложения сборки (secrets.WP_GRAPHQL_TOKEN): чтение, создание
+#                   черновика и его удаление. В лог — только коды ответов;
 #   dispatch-setup — пересборка стенда сразу после изменений в WordPress: репозиторий и токен из
 #                   secrets.WP_DISPATCH_TOKEN (fine-grained, Contents: Read and write на этот репозиторий);
 #                   событие из WordPress обновляет стенд и, после апрува (vars.PROD_APPROVED=yes), боевой unitr.ru.
@@ -22,7 +25,7 @@ on:
     inputs:
       action:
         type: choice
-        options: [status, check, backup, seed, remove, scenario, post-show, seo-fill, plugin-update, frontend, dispatch-setup, measure]
+        options: [status, check, backup, seed, remove, scenario, post-show, seo-fill, plugin-update, frontend, dispatch-setup, measure, rest]
         default: status
       post_id:
         description: ID записи (для post-show)
@@ -108,6 +111,37 @@ jobs:
           sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
             "DEMO_MODE=$ACTION DEMO_PHP=wp-stand-scenario.php bash tmp/unitr-demo/wp-demo-content.sh" | tee wp.log
           ! grep -q '^FAIL' wp.log || [ "$ACTION" = check ]
+      - name: REST API — настройки WordPress (только чтение)
+        if: inputs.action == 'rest'
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SSH_USER@$SSH_HOST" \
+            "DEMO_MODE=rest DEMO_PHP=wp-stand-scenario.php bash tmp/unitr-demo/wp-demo-content.sh"
+      - name: REST API — запросы снаружи
+        if: inputs.action == 'rest'
+        env:
+          WP_GRAPHQL_URL: ${{ secrets.WP_GRAPHQL_URL }}
+          WP_GRAPHQL_TOKEN: ${{ secrets.WP_GRAPHQL_TOKEN }}
+        run: |
+          WP=$(node -e 'console.log(new URL(process.env.WP_GRAPHQL_URL).origin)')
+          AUTH="Authorization: Basic $(printf '%s' "$WP_GRAPHQL_TOKEN" | base64 -w0)"
+          req() { # метод путь [авторизация] [тело] → «код ответа, code из JSON»
+            local m=$1 p=$2 a=${3:-} d=${4:-} args=(-sS -o r.json -w '%{http_code}' -X "$m")
+            [ -n "$a" ] && args+=(-H "$AUTH")
+            [ -n "$d" ] && args+=(-H 'Content-Type: application/json' --data "$d")
+            local c; c=$(curl "${args[@]}" "$WP$p" || true)
+            echo "$c $(jq -r 'if type=="object" then (.code // "") else "" end' r.json 2>/dev/null)"
+          }
+          echo "без авторизации:"
+          echo "  GET /wp-json/ → $(req GET /wp-json/)"
+          echo "  GET /wp-json/wp/v2/posts → $(req GET '/wp-json/wp/v2/posts?per_page=1')"
+          echo "с паролем приложения (Basic Auth):"
+          echo "  GET /wp-json/ → $(req GET /wp-json/ 1)"
+          echo "  GET /wp-json/wp/v2/users/me → $(req GET /wp-json/wp/v2/users/me 1)"
+          echo "  GET /wp-json/wp/v2/posts → $(req GET '/wp-json/wp/v2/posts?per_page=1' 1)"
+          echo "  POST /wp-json/wp/v2/posts (черновик) → $(req POST /wp-json/wp/v2/posts 1 '{"title":"Проверка REST API (удаляется автоматически)","status":"draft"}')"
+          ID=$(jq -r '.id // empty' r.json 2>/dev/null)
+          if [ -n "$ID" ]; then echo "  DELETE /wp-json/wp/v2/posts/<черновик>?force=true → $(req DELETE "/wp-json/wp/v2/posts/$ID?force=true" 1)"; fi
+          rm -f r.json
       - name: Резервная копия
         if: inputs.action == 'backup'
         run: |

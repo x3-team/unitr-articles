@@ -12,6 +12,7 @@
  *   revert   — вернуть всё как было до apply.
  *   dispatch — сохранить в настройках плагина репозиторий и токен GitHub (из stdin) для мгновенной пересборки.
  *   frontend — адрес сайта (FRONTEND_URL, по умолчанию https://unitr.ru) в настройках раздела и в wp-config.php.
+ *   rest     — только чтение: кто закрывает REST API и доступны ли пароли приложений (плагины, фильтры, .htaccess).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -49,6 +50,82 @@ $by_key = function ( $key ) use ( $demo ) {
 	}
 	return null;
 };
+
+if ( 'rest' === $mode ) {
+	// где объявлен обработчик фильтра (файл относительно wp-content и строка) — без кода
+	$where = function ( $cb ) {
+		try {
+			if ( is_string( $cb ) && false !== strpos( $cb, '::' ) ) {
+				$cb = explode( '::', $cb );
+			}
+			$r = is_array( $cb ) ? new ReflectionMethod( $cb[0], $cb[1] ) : new ReflectionFunction( $cb );
+			$name = is_array( $cb ) ? ( is_object( $cb[0] ) ? get_class( $cb[0] ) : $cb[0] ) . '::' . $cb[1] : ( $cb instanceof Closure ? 'closure' : (string) $cb );
+			return $name . ' @ ' . str_replace( WP_CONTENT_DIR . '/', '', (string) $r->getFileName() ) . ':' . $r->getStartLine();
+		} catch ( Throwable $e ) {
+			return 'не определить';
+		}
+	};
+	$hooks = function ( $tag ) use ( $where ) {
+		global $wp_filter;
+		$list = array();
+		if ( isset( $wp_filter[ $tag ] ) ) {
+			foreach ( $wp_filter[ $tag ]->callbacks as $prio => $cbs ) {
+				foreach ( $cbs as $cb ) {
+					$list[] = "[$prio] " . $where( $cb['function'] );
+				}
+			}
+		}
+		return $list;
+	};
+	WP_CLI::log( 'WordPress ' . get_bloginfo( 'version' ) . ', тема: ' . wp_get_theme()->get( 'Name' ) . ' (' . get_stylesheet() . ')' );
+	WP_CLI::log( 'Активные плагины: ' . implode( ', ', array_map( 'dirname', (array) get_option( 'active_plugins', array() ) ) ) );
+	$mu = function_exists( 'get_mu_plugins' ) ? array_keys( get_mu_plugins() ) : array();
+	WP_CLI::log( 'MU-плагины: ' . ( $mu ? implode( ', ', $mu ) : 'нет' ) );
+	WP_CLI::log( 'Пароли приложений: поддерживаются (HTTPS) — ' . ( wp_is_application_passwords_supported() ? 'да' : 'нет' ) . ', доступны — ' . ( wp_is_application_passwords_available() ? 'да' : 'нет' ) );
+	WP_CLI::log( 'Константа WP_ENVIRONMENT_TYPE: ' . wp_get_environment_type() );
+	foreach ( array( 'rest_authentication_errors', 'wp_is_application_passwords_available', 'application_password_is_api_request', 'determine_current_user', 'rest_endpoints', 'rest_pre_dispatch', 'rest_enabled', 'rest_jsonp_enabled', 'authenticate' ) as $tag ) {
+		$l = $hooks( $tag );
+		WP_CLI::log( "Фильтр $tag: " . ( $l ? '' : 'нет обработчиков' ) );
+		foreach ( $l as $line ) {
+			WP_CLI::log( "  $line" );
+		}
+	}
+	// упоминания в коде плагинов и темы (только пути файлов)
+	$needles = array( 'rest_authentication_errors', 'rest_not_logged_in', 'wp_is_application_passwords_available', 'application_password' );
+	$found   = array();
+	foreach ( array( WP_PLUGIN_DIR, WPMU_PLUGIN_DIR, get_theme_root() ) as $root ) {
+		if ( ! is_dir( $root ) ) {
+			continue;
+		}
+		$it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $root, FilesystemIterator::SKIP_DOTS ) );
+		foreach ( $it as $f ) {
+			if ( 'php' !== $f->getExtension() || $f->getSize() > 2000000 || preg_match( '#/(vendor|node_modules|tests?)/#', $f->getPathname() ) ) {
+				continue;
+			}
+			$c = file_get_contents( $f->getPathname() );
+			foreach ( $needles as $n ) {
+				if ( false !== strpos( $c, $n ) ) {
+					$found[ str_replace( WP_CONTENT_DIR . '/', '', $f->getPathname() ) ][] = $n;
+				}
+			}
+		}
+	}
+	WP_CLI::log( 'Код с упоминанием REST-авторизации / паролей приложений:' );
+	foreach ( $found as $file => $ns ) {
+		WP_CLI::log( "  $file: " . implode( ', ', array_unique( $ns ) ) );
+	}
+	// передаётся ли заголовок Authorization в PHP (без него Basic Auth паролей приложений не работает)
+	$ht = ABSPATH . '.htaccess';
+	if ( is_readable( $ht ) ) {
+		$h = file_get_contents( $ht );
+		WP_CLI::log( '.htaccess WordPress: HTTP_AUTHORIZATION — ' . ( preg_match( '/HTTP_AUTHORIZATION/i', $h ) ? 'пробрасывается' : 'не упоминается' ) . '; RewriteEngine — ' . ( preg_match( '/RewriteEngine\s+On/i', $h ) ? 'да' : 'нет' ) );
+	}
+	// ответ REST изнутри WordPress: анонимно (как его видит внешний запрос без авторизации)
+	wp_set_current_user( 0 );
+	$err = apply_filters( 'rest_authentication_errors', null );
+	WP_CLI::log( 'rest_authentication_errors для анонима: ' . ( is_wp_error( $err ) ? $err->get_error_code() . ' (' . (int) ( $err->get_error_data()['status'] ?? 0 ) . ')' : var_export( $err, true ) ) );
+	return;
+}
 
 if ( 'show' === $mode ) {
 	// текст статьи — для подготовки отрывка и SEO-полей (опубликованная статья, сведения публичные)

@@ -2,6 +2,8 @@
 // Скриншоты и размеры вёрстки страниц раздела (отладка вёрстки на стенде и бою).
 //   node scripts/screens.mjs <out-dir> <URL>...   BASIC_AUTH=логин:пароль — для адресов test.*
 // В <out-dir>: PNG (1440 и 390 px) и layout.json — ширины контейнера, колонок, текста и блоков текста статьи.
+// HEADER=1 — вместо этого шапка: размеры и стили логотипа, пунктов меню, телефона и кнопки, разметка логотипа
+// (сравнение шапки раздела с шапкой SPA unitr.ru).
 import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright";
@@ -50,6 +52,52 @@ function measure() {
   };
 }
 
+// шапка страницы (раздела или SPA): выполняется в браузере
+function measureHeader() {
+  const r2 = (n) => Math.round(n * 10) / 10;
+  const box = (el) => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r2(r.x), y: r2(r.y), w: r2(r.width), h: r2(r.height) };
+  };
+  const st = (el, keys) => {
+    if (!el) return null;
+    const cs = getComputedStyle(el);
+    return Object.fromEntries(keys.map((k) => [k, cs[k]]));
+  };
+  const header = document.querySelector("header") || document.body.firstElementChild;
+  const visible = (el) => el.getClientRects().length && getComputedStyle(el).visibility !== "hidden";
+  const logoLink =
+    [...header.querySelectorAll("a")].find((a) => visible(a) && /^(\/|https?:\/\/[^/]+\/?)$/.test(a.getAttribute("href") || "") && a.querySelector("img,svg")) ||
+    [...header.querySelectorAll("a")].find((a) => visible(a) && a.querySelector("img,svg"));
+  const media = logoLink ? [...logoLink.querySelectorAll("img,svg")].filter(visible) : [];
+  const links = [...header.querySelectorAll("a, button")]
+    .filter((el) => visible(el) && (el.textContent || "").trim())
+    .slice(0, 12)
+    .map((el) => ({
+      text: el.textContent.trim().replace(/\s+/g, " ").slice(0, 40),
+      ...box(el),
+      ...st(el, ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "color", "backgroundColor", "paddingLeft", "paddingTop", "borderRadius"]),
+    }));
+  return {
+    viewport: innerWidth,
+    header: { ...box(header), ...st(header, ["backgroundColor", "borderBottom", "boxShadow", "position"]) },
+    headerInner: [...header.children].filter(visible).map((c) => ({ tag: c.tagName.toLowerCase(), cls: String(c.className).slice(0, 60), ...box(c), ...st(c, ["paddingLeft", "paddingRight", "maxWidth"]) })),
+    logoLink: logoLink ? { href: logoLink.getAttribute("href"), ...box(logoLink) } : null,
+    logo: media.map((m) => ({
+      tag: m.tagName.toLowerCase(),
+      ...box(m),
+      src: m.getAttribute("src"),
+      currentSrc: m.currentSrc || null,
+      natural: m.naturalWidth ? `${m.naturalWidth}x${m.naturalHeight}` : null,
+      viewBox: m.getAttribute("viewBox"),
+      outerHTML: m.tagName.toLowerCase() === "svg" ? m.outerHTML.slice(0, 12000) : m.outerHTML.slice(0, 600),
+    })),
+    links,
+    bodyFont: getComputedStyle(document.body).fontFamily,
+  };
+}
+
 const browser = await chromium.launch();
 const report = {};
 for (const url of urls) {
@@ -63,8 +111,8 @@ for (const url of urls) {
     const page = await ctx.newPage();
     await page.goto(url, { waitUntil: "load", timeout: 45_000 });
     await page.waitForTimeout(800);
-    report[url][label] = await page.evaluate(measure);
-    await page.screenshot({ path: path.join(out, `${name}_${label}.png`), fullPage: true });
+    report[url][label] = await page.evaluate(process.env.HEADER ? measureHeader : measure);
+    await page.screenshot({ path: path.join(out, `${name}_${label}.png`), ...(process.env.HEADER ? { clip: { x: 0, y: 0, width: viewport.width, height: 160 } } : { fullPage: true }) });
     await ctx.close();
   }
 }
