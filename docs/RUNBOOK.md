@@ -132,3 +132,9 @@ node scripts/check-acceptance.mjs https://unitr.ru --mode=server --report=accept
 - Б: `DEPLOY_MODE` → пусто (останавливает расписание); вернуть `.htaccess.before-unitr-articles` → `.htaccess`
   и `robots.txt.before-unitr-articles` → `robots.txt`, удалить каталог `articles/`, `sitemap.xml`, `sitemaps/`.
 - WordPress: плагин можно деактивировать в любой момент — статьи, рубрика и поля остаются.
+
+## 7. WP REST API для авто-публикации (manage.unitr.ru)
+
+- Анонимный REST закрыт плагином заказчика `untr-requests-security` (фильтр `rest_authentication_errors`, ответ 401 `rest_not_logged_in`). Вошедшего пользователя он пропускает — так и задумано, анонимное закрытие остаётся.
+- Авторизация — пароль приложения (Пользователи → Профиль → «Пароли приложений»), запросы с Basic Auth `логин:пароль приложения`. Плагин unitr-articles с 1.3.2 помечает запросы `/wp-json/` как API с самого начала (`includes/rest-auth.php`), иначе WordPress может определить пользователя анонимом до распознавания REST.
+- Проверка: workflow «WP test content», action=`rest`. Без секрета `WP_REST_AUTH` проверяется только анонимный доступ; с секретом (`логин:пароль приложения`) — чтение, создание черновика и его удаление. В лог выводятся только коды ответов.

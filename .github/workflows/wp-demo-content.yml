@@ -120,10 +120,11 @@ jobs:
         if: inputs.action == 'rest'
         env:
           WP_GRAPHQL_URL: ${{ secrets.WP_GRAPHQL_URL }}
-          WP_GRAPHQL_TOKEN: ${{ secrets.WP_GRAPHQL_TOKEN }}
+          # «логин:пароль приложения» пользователя для авто-публикации; без секрета проверяется только анонимный доступ
+          WP_REST_AUTH: ${{ secrets.WP_REST_AUTH }}
         run: |
           WP=$(node -e 'console.log(new URL(process.env.WP_GRAPHQL_URL).origin)')
-          AUTH="Authorization: Basic $(printf '%s' "$WP_GRAPHQL_TOKEN" | base64 -w0)"
+          AUTH="Authorization: Basic $(printf '%s' "$WP_REST_AUTH" | base64 -w0)"
           req() { # метод путь [авторизация] [тело] → «код ответа, code из JSON»
             local m=$1 p=$2 a=${3:-} d=${4:-}
             local args=(-sS -o r.json -w '%{http_code}' -X "$m")
@@ -135,6 +136,10 @@ jobs:
           echo "без авторизации:"
           echo "  GET /wp-json/ → $(req GET /wp-json/)"
           echo "  GET /wp-json/wp/v2/posts → $(req GET '/wp-json/wp/v2/posts?per_page=1')"
+          if [[ $WP_REST_AUTH != *:* ]]; then
+            echo "с паролем приложения: секрет WP_REST_AUTH (логин:пароль приложения) не задан — проверка пропущена"
+            exit 0
+          fi
           echo "с паролем приложения (Basic Auth):"
           echo "  GET /wp-json/ → $(req GET /wp-json/ 1)"
           echo "  GET /wp-json/wp/v2/users/me → $(req GET /wp-json/wp/v2/users/me 1)"
@@ -142,15 +147,6 @@ jobs:
           echo "  POST /wp-json/wp/v2/posts (черновик) → $(req POST /wp-json/wp/v2/posts 1 '{"title":"Проверка REST API (удаляется автоматически)","status":"draft"}')"
           ID=$(jq -r '.id // empty' r.json 2>/dev/null)
           if [ -n "$ID" ]; then echo "  DELETE /wp-json/wp/v2/posts/<черновик>?force=true → $(req DELETE "/wp-json/wp/v2/posts/$ID?force=true" 1)"; fi
-          echo "  GET ?rest_route=/wp/v2/users/me → $(req GET '/?rest_route=/wp/v2/users/me' 1)"
-          # тот же секрет: похож ли он на пароль приложения (24 символа без пробелов) и узнаёт ли его GraphQL — без вывода значений
-          PW=${WP_GRAPHQL_TOKEN#*:}; PW=${PW// /}
-          echo "секрет: логин:пароль — $([[ $WP_GRAPHQL_TOKEN == *:* ]] && echo да || echo нет); формат пароля приложения — $([[ $PW =~ ^[A-Za-z0-9]{24}$ ]] && echo да || echo нет)"
-          for a in "" 1; do
-            h=(-H 'Content-Type: application/json'); [ -n "$a" ] && h+=(-H "$AUTH")
-            v=$(curl -sS "${h[@]}" --data '{"query":"{viewer{databaseId}}"}' "$WP/graphql" | jq -r 'if .data.viewer then "пользователь распознан" else "аноним" end' 2>/dev/null)
-            echo "  GraphQL viewer $([ -n "$a" ] && echo 'с паролем' || echo 'без авторизации') → $v"
-          done
           rm -f r.json
       - name: Резервная копия
         if: inputs.action == 'backup'
