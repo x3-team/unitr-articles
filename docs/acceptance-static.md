@@ -47,7 +47,7 @@
 |---|---|---|
 | ✅ | Кеш HTML архива ≤ 900 с (Cache-Control) | public, max-age=300, must-revalidate |
 | ✅ | Кеш sitemap.xml ≤ 900 с | public, max-age=300, must-revalidate |
-| ✅ | Обновление: пересборка и выкладка каждые 10 минут (.github/workflows/deploy-static.yml) |  |
+| ✅ | Обновление: пересборка и выкладка по событию из WordPress (2–3 минуты) и раз в час по расписанию (.github/workflows/deploy-static.yml) |  |
 | ✅ | Снятая с публикации (черновик) отсутствует в разделе |  |
 
 ## 4 Карта сайта и индексация

@@ -1,8 +1,30 @@
 /*
  * Стили раздела «Статьи» по макету Figma (RATEP → «Юнит-Ресурс / ТЗ к CMS секциям»,
  * «Новости предприятия — 1440», «Страница новости — 1440»).
- * Шрифт макета — Suisse Intl (коммерческий); если он подключён на сайте, используется он, иначе Inter.
+ * Шрифт — SuisseIntl из /fonts/ основного сайта unitr.ru (те же файлы, что у SPA); где их нет (демо) — Inter.
+ * Шапка повторяет шапку SPA unitr.ru 1:1: высота 58 + линия 1 px, ячейка логотипа 88 px, пункты меню с полями 24 px.
  */
+@font-face {
+  font-family: SuisseIntl;
+  src: url("/fonts/Suisse-Intl-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: SuisseIntl;
+  src: url("/fonts/Suisse-Intl-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: SuisseIntl;
+  src: url("/fonts/Suisse-Intl-Bold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
 :root {
   --c-text: #00122e;
   --c-text-60: rgba(0, 18, 46, 0.6);
@@ -16,7 +38,9 @@
   --c-accent: #68bc25;
   --c-accent-dark: #4f9617;
   --c-accent-soft: #eef7e6;
-  --font: "Suisse Intl", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font: SuisseIntl, "Suisse Intl", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --c-header-line: rgba(0, 0, 0, 0.15);
+  --header-h: 58px;
   --gutter: 24px;
   --max: 1440px;
 }
@@ -91,7 +115,7 @@ ol {
   top: 0;
   z-index: 50;
   background: #fff;
-  border-bottom: 1px solid var(--c-line);
+  border-bottom: 1px solid var(--c-header-line);
 }
 .header__toggle {
   position: absolute;
@@ -99,19 +123,23 @@ ol {
   pointer-events: none;
 }
 .header__bar {
-  max-width: var(--max);
-  margin: 0 auto;
-  height: 56px;
+  height: var(--header-h);
   display: flex;
   align-items: stretch;
 }
+/* как в SPA: 88 × 58, поля 16 / 28 px, знак 31 × 26 */
 .header__logo {
-  width: 87px;
+  width: 88px;
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-right: 1px solid var(--c-line);
+  padding: 16px 28px;
+  border-right: 1px solid var(--c-header-line);
+}
+.header__logo svg {
+  display: block;
+  flex: none;
 }
 .header__nav {
   display: flex;
@@ -126,9 +154,10 @@ ol {
   position: relative;
   display: flex;
   align-items: center;
-  height: 56px;
+  height: var(--header-h);
   padding: 0 24px;
   font-size: 14px;
+  line-height: 20px;
   font-weight: 500;
   color: var(--c-ink);
   transition: color 0.15s;
@@ -160,7 +189,7 @@ ol {
   white-space: nowrap;
 }
 .header__cta {
-  border-left: 1px solid var(--c-line);
+  border-left: 1px solid var(--c-header-line);
 }
 .header__cta:hover,
 .header__phone:hover {
@@ -790,18 +819,15 @@ a.pager__num:hover {
   .header__bar {
     justify-content: space-between;
   }
-  .header__logo {
-    width: 72px;
-  }
   .header__burger {
     display: flex;
     flex-direction: column;
     justify-content: center;
     gap: 5px;
-    width: 56px;
-    padding: 0 16px;
+    width: 57px;
+    padding: 0 18px;
     cursor: pointer;
-    border-left: 1px solid var(--c-line);
+    border-left: 1px solid var(--c-header-line);
   }
   .header__burger span {
     display: block;

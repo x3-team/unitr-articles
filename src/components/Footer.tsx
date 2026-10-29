@@ -9,7 +9,7 @@ export function Footer() {
     <footer className="footer">
       <div className="footer__grid">
         <div className="footer__logo">
-          <Logo size={28} />
+          <Logo height={28} />
         </div>
         <div className="footer__col">
           <p className="footer__label">Контактные данные</p>

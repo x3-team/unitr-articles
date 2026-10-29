@@ -4,7 +4,7 @@
 # Цели:
 #   test       — тестовый стенд (vars.STAND_URL / vars.STAND_DIR, Basic Auth из secrets.STAND_AUTH);
 #   production — боевой unitr.ru. Только после апрува заказчика (vars.PROD_APPROVED=yes); вручную — target=production.
-# По событию из WordPress (repository_dispatch) и по расписанию (каждые 10 минут) обновляются цели из
+# По событию из WordPress (repository_dispatch) и по расписанию (раз в час — подстраховка, если событие не дошло) обновляются цели из
 # vars.DEPLOY_TARGETS (например ["test"]) и, при vars.PROD_APPROVED=yes, production.
 #
 # Секреты: WP_GRAPHQL_URL, WP_GRAPHQL_TOKEN (пароль приложения WP; только при сборке, на хостинг не попадает),
@@ -13,7 +13,9 @@ name: Deploy unitr.ru (static)
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    # раз в час, в 17 минут: основное обновление — событие из WordPress (2–3 минуты); расписание «каждые 10 минут»
+    # GitHub на деле запускал раз в 4–6 часов
+    - cron: "17 * * * *"
   repository_dispatch:
     types: [wp-content-changed]
   workflow_dispatch:

@@ -33,8 +33,8 @@ scp deploy/preflight.sh <сервер>:~ && ssh <сервер> 'bash ~/preflight
 `manage.unitr.ru/graphql`, и порекомендует вариант:
 
 - **А — Node.js-приложение** (VPS / root, или Node.js ≥ 20 доступен): SSR + ISR + мгновенный вебхук. Основной вариант.
-- **Б — статическая выкладка** (виртуальный хостинг без Node.js): GitHub Actions собирает HTML из WordPress каждые
-  10 минут (и сразу по сигналу из WordPress) и выкладывает по SFTP/FTP; 301 и 404 — правилами `.htaccess`.
+- **Б — статическая выкладка** (виртуальный хостинг без Node.js): GitHub Actions собирает HTML из WordPress сразу
+  по сигналу из WordPress (и раз в час по расписанию) и выкладывает по SFTP/FTP; 301 и 404 — правилами `.htaccess`.
   Все критерии ТЗ выполняются (проверено на настоящем Apache: `tests/e2e/run-apache-e2e.mjs`), отличие от А —
   обновление за 2–10 минут вместо мгновенного.
 
@@ -102,7 +102,7 @@ Apache — `deploy/apache-unitr.conf` в `<VirtualHost>`. `nginx -t && systemctl
 
 **Б4.** Мгновенное обновление: в WordPress «Настройки → Раздел «Статьи»» указать репозиторий `x3-team/unitr-articles`
 и fine-grained токен GitHub (только этот репозиторий, Contents: Read and write; лучше константой
-`UNITR_GITHUB_TOKEN` в wp-config.php). Без этого раздел обновляется по расписанию каждые 10 минут.
+`UNITR_GITHUB_TOKEN` в wp-config.php). Без этого раздел обновляется только по расписанию раз в час.
 Поле «Секрет вебхука» в варианте Б оставить пустым.
 
 ## 4. Проверка после выкладки (оба варианта)

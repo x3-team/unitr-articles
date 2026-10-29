@@ -142,6 +142,7 @@ async function main() {
   const homeDesc = metaContent(home.body, "description");
   check("Собственный title, отличный от главной", archTitle && archTitle !== homeTitle, `«${archTitle}» vs главная «${homeTitle}»`);
   check("Собственный meta description, отличный от главной", archDesc && archDesc !== homeDesc, archDesc);
+  check("title архива не длиннее 60 знаков, og:title совпадает", archTitle.length <= 60 && metaContent(arch.body, "og:title") === archTitle, `${archTitle.length} зн., og:title «${metaContent(arch.body, "og:title")}»`);
   const archLd = jsonLds(arch.body);
   const bc = archLd.find((x) => x["@type"] === "BreadcrumbList");
   check("Хлебные крошки в HTML + Schema.org BreadcrumbList", /class="crumbs"/.test(arch.body) && bc && bc.itemListElement?.length >= 2, bc ? bc.itemListElement.map((i) => i.name).join(" › ") : "нет");
@@ -155,7 +156,7 @@ async function main() {
     const r = await get(`/articles/page/${p}/`);
     const url = `${BASE}/articles/page/${p}/`;
     check(`/articles/page/${p}/: 200 и canonical на себя`, r.status === 200 && canonicalOf(r.body) === url, `HTTP ${r.status}, canonical ${canonicalOf(r.body)}`);
-    check(`/articles/page/${p}/: title и description уникальны`, titleOf(r.body) !== archTitle && /Страница \d+/.test(metaContent(r.body, "description") || ""), titleOf(r.body));
+    check(`/articles/page/${p}/: title и description уникальны, title не длиннее 60 знаков`, titleOf(r.body) !== archTitle && titleOf(r.body).length <= 60 && /Страница \d+/.test(metaContent(r.body, "description") || ""), titleOf(r.body));
     check(`/articles/page/${p}/: «Предыдущая» и rel=prev`, /rel="prev"/.test(r.body) && linkRel(r.body, "prev") === (p === 2 ? `${BASE}/articles/` : `${BASE}/articles/page/${p - 1}/`), linkRel(r.body, "prev"));
     check(`/articles/page/${p}/: H1 «Статьи»`, h1Of(r.body)[0] === "Статьи");
     hrefs(r.body).filter(isArticleHref).forEach((h) => allArticleUrls.add(abs(h)));
